@@ -1,0 +1,1588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scan Tech Error &amp; Bonus Tracker</title>
+<style>
+  :root{
+    --bg:#f4f5f7; --card:#ffffff; --border:#e3e5e9; --text:#1c2027; --muted:#6b7280;
+    --accent:#2f6feb; --green:#1a7f37; --green-bg:#e6f4ea; --red:#c1121f; --red-bg:#fdecec;
+    --amber:#a15c00; --amber-bg:#fff3dc; --shadow:0 1px 2px rgba(16,24,40,.06),0 1px 3px rgba(16,24,40,.08);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);}
+  header{background:#12203f;color:#fff;padding:20px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  header h1{font-size:19px;margin:0;font-weight:600;}
+  header .sub{font-size:12.5px;color:#b7c3dc;margin-top:2px;}
+  header .meta{font-size:12px;color:#b7c3dc;text-align:right;}
+  nav{display:flex;gap:4px;padding:10px 24px 0;background:#12203f;flex-wrap:wrap;}
+  nav button{background:transparent;border:none;color:#c7d2e6;padding:10px 16px;font-size:13.5px;font-weight:500;cursor:pointer;border-radius:8px 8px 0 0;}
+  nav button.active{background:var(--bg);color:var(--text);}
+  nav button:hover:not(.active){background:#1c2f57;color:#fff;}
+  main{padding:24px 28px 60px;max-width:1300px;margin:0 auto;}
+  .view{display:none;}
+  .view.active{display:block;}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px;}
+  .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);}
+  .kpi .label{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;}
+  .kpi .value{font-size:26px;font-weight:700;margin-top:6px;}
+  .kpi .note{font-size:12px;color:var(--muted);margin-top:4px;}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:18px 20px;box-shadow:var(--shadow);margin-bottom:20px;}
+  .card h2{font-size:15px;margin:0 0 4px;font-weight:600;}
+  .card .desc{font-size:12.5px;color:var(--muted);margin-bottom:14px;}
+  table{width:100%;border-collapse:collapse;font-size:13px;}
+  th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);border-bottom:1px solid var(--border);padding:8px 10px;white-space:nowrap;}
+  td{padding:9px 10px;border-bottom:1px solid #eef0f2;vertical-align:top;}
+  tr:hover td{background:#fafbfc;}
+  .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap;}
+  .badge.green{background:var(--green-bg);color:var(--green);}
+  .badge.red{background:var(--red-bg);color:var(--red);}
+  .badge.amber{background:var(--amber-bg);color:var(--amber);}
+  .badge.grey{background:#eef0f3;color:#555;}
+  .controls{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
+  .controls input,.controls select{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;}
+  .controls input{flex:1;min-width:180px;}
+  .bar-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px;}
+  .bar-row .name{width:150px;flex-shrink:0;color:var(--text);}
+  .bar-track{flex:1;background:#eef0f3;border-radius:6px;height:14px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:6px;}
+  .bar-row .val{width:56px;text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;}
+  .empty{color:var(--muted);font-size:13px;padding:14px 0;}
+  .two-col{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;}
+  @media (max-width:900px){.two-col{grid-template-columns:1fr;}}
+  .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;}
+  #load-error{display:none;background:#fdecec;border:1px solid #f3b9bd;color:#8a1c22;padding:14px 18px;border-radius:10px;margin-bottom:18px;font-size:13.5px;}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:20px;}
+
+  /* --- Auth + forms --- */
+  #auth-area{display:flex;align-items:center;gap:10px;}
+  .g-btn{background:#fff;color:#12203f;border:1px solid #c7d2e6;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+  .g-btn:hover{background:#eef2fb;}
+  .user-chip{display:flex;align-items:center;gap:8px;background:#1c2f57;padding:6px 10px 6px 6px;border-radius:999px;font-size:12.5px;color:#fff;}
+  .user-chip img{width:24px;height:24px;border-radius:50%;}
+  .user-chip .signout{color:#b7c3dc;text-decoration:underline;cursor:pointer;margin-left:4px;}
+  .locked-notice{background:#fff3dc;border:1px solid #f2d59a;color:#7a4a00;padding:16px 18px;border-radius:10px;font-size:13.5px;line-height:1.5;}
+  .locked-notice b{display:block;margin-bottom:4px;font-size:14px;}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 20px;}
+  .form-grid .field.full{grid-column:1 / -1;}
+  @media (max-width:700px){.form-grid{grid-template-columns:1fr;}}
+  .field label{display:block;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:5px;}
+  .field .req{color:var(--red);}
+  .field input,.field select,.field textarea{width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:8px;font-size:13.5px;font-family:inherit;background:#fff;}
+  .field textarea{resize:vertical;min-height:70px;}
+  .field .hint{font-size:11.5px;color:var(--muted);margin-top:4px;}
+  .form-actions{display:flex;align-items:center;gap:12px;margin-top:18px;}
+  .btn-primary{background:var(--accent);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer;}
+  .btn-primary:hover{background:#2557c7;}
+  .btn-primary:disabled{background:#9db3e8;cursor:not-allowed;}
+  .form-msg{font-size:13px;}
+  .form-msg.success{color:var(--green);}
+  .form-msg.error{color:var(--red);}
+  .toast{position:fixed;bottom:20px;right:20px;background:#12203f;color:#fff;padding:12px 18px;border-radius:10px;font-size:13.5px;box-shadow:var(--shadow);z-index:50;max-width:340px;}
+
+  /* --- Profile modal --- */
+  .tech-link{color:var(--accent);cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+  .tech-link:hover{color:#1c4bb0;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,20,30,.55);display:none;align-items:flex-start;justify-content:center;padding:40px 20px;overflow-y:auto;z-index:100;}
+  #error-modal{z-index:110;}
+  .modal-box{background:var(--bg);border-radius:14px;max-width:1000px;width:100%;box-shadow:0 8px 30px rgba(0,0,0,.3);}
+  .modal-header{display:flex;align-items:center;justify-content:space-between;padding:18px 24px;background:#12203f;color:#fff;border-radius:14px 14px 0 0;position:sticky;top:0;}
+  .modal-header h2{margin:0;font-size:17px;}
+  .modal-close{cursor:pointer;font-size:22px;line-height:1;color:#c7d2e6;}
+  .modal-close:hover{color:#fff;}
+  .modal-body{padding:20px 24px 26px;}
+  .modal-body .card{margin-bottom:16px;}
+  .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px 24px;margin-bottom:16px;}
+  .detail-grid .full{grid-column:1 / -1;}
+  .detail-grid .k{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);font-weight:600;margin-bottom:3px;}
+  .detail-grid .v{font-size:13.5px;}
+  @media (max-width:700px){.detail-grid{grid-template-columns:1fr;}}
+  tr.clickable-row{cursor:pointer;}
+  tr.clickable-row:hover td{background:#eef4ff;}
+  .cat-bar-row{position:relative;}
+  .cat-link{cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:2px;}
+  .cat-tooltip{display:none;position:absolute;left:0;top:calc(100% + 4px);background:#12203f;color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.6;white-space:nowrap;z-index:30;box-shadow:var(--shadow);}
+  .cat-bar-row:hover .cat-tooltip{display:block;}
+</style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Scan Tech Error &amp; Bonus Tracker</h1>
+    <div class="sub">Live view of the production Google Sheet — no AppSheet required</div>
+  </div>
+  <div style="display:flex;align-items:center;gap:18px;">
+    <div class="meta">
+      <div id="last-updated">Loading…</div>
+      <div id="refresh-link" style="cursor:pointer;text-decoration:underline;margin-top:2px;">Refresh now</div>
+    </div>
+    <div id="auth-area"></div>
+  </div>
+</header>
+
+<nav id="tabs">
+  <button data-view="overview" class="active">Overview</button>
+  <button data-view="pending">Pending Review</button>
+  <button data-view="errorlog">Error Log</button>
+  <button data-view="bonus">Bonus Overview</button>
+  <button data-view="attendance">Attendance</button>
+  <button data-view="equipment">Equipment</button>
+  <span style="width:1px;background:#2a3b63;margin:6px 4px;"></span>
+  <button data-view="logerror">+ Log Error</button>
+  <button data-view="logcoaching">+ Log Coaching</button>
+  <button data-view="logattendance">+ Log Attendance</button>
+  <button data-view="addasset">+ Add Asset</button>
+  <button data-view="logequipissue">+ Log Equip. Issue</button>
+</nav>
+
+<main>
+  <div id="load-error"></div>
+
+  <!-- OVERVIEW -->
+  <section id="view-overview" class="view active">
+    <div class="kpi-row" id="kpi-row"></div>
+    <div class="two-col">
+      <div class="card">
+        <h2>Error categories (all time)</h2>
+        <div class="desc">Standard_Category breakdown across every logged error</div>
+        <div id="category-bars"></div>
+      </div>
+      <div class="card">
+        <h2>Avg. daily score by technician</h2>
+        <div class="desc">Output ÷ expected pace, averaged across all logged days</div>
+        <div id="score-bars"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Most recent errors</h2>
+      <div class="desc">Latest 8 entries from Error_Log</div>
+      <div style="overflow-x:auto"><table id="recent-errors-table"></table></div>
+    </div>
+  </section>
+
+  <!-- PENDING REVIEW -->
+  <section id="view-pending" class="view">
+    <div class="card">
+      <h2>Pending Review</h2>
+      <div class="desc">Error_Log rows with Confirmation_Status = "Pending Review", plus any flagged "Pending Discussion" for coaching</div>
+      <div style="overflow-x:auto"><table id="pending-table"></table></div>
+    </div>
+  </section>
+
+  <!-- ERROR LOG -->
+  <section id="view-errorlog" class="view">
+    <div class="card">
+      <h2>Full Error Log</h2>
+      <div class="controls">
+        <input type="text" id="errorlog-search" placeholder="Search technician, order ID, description…">
+        <select id="errorlog-status-filter"><option value="">All statuses</option></select>
+        <select id="errorlog-tech-filter"><option value="">All technicians</option></select>
+      </div>
+      <div style="overflow-x:auto"><table id="errorlog-table"></table></div>
+    </div>
+  </section>
+
+  <!-- BONUS -->
+  <section id="view-bonus" class="view">
+    <div class="card">
+      <h2>Monthly Bonus Summary</h2>
+      <div class="desc" id="bonus-period"></div>
+      <div style="overflow-x:auto"><table id="bonus-table"></table></div>
+    </div>
+  </section>
+
+  <!-- ATTENDANCE -->
+  <section id="view-attendance" class="view">
+    <div class="two-col">
+      <div class="card">
+        <h2>Attendance by technician</h2>
+        <div class="desc">Rolling attendance % (from Technicians tab) and logged absences (from Attendance_Log)</div>
+        <div style="overflow-x:auto"><table id="attendance-summary-table"></table></div>
+      </div>
+      <div class="card">
+        <h2>Recent absences</h2>
+        <div class="desc">Most recent entries, newest first</div>
+        <div style="overflow-x:auto"><table id="attendance-log-table"></table></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- EQUIPMENT -->
+  <section id="view-equipment" class="view">
+    <div class="card">
+      <h2>Equipment</h2>
+      <div class="desc">Joined with Stations for department/location context</div>
+      <div style="overflow-x:auto"><table id="equipment-table"></table></div>
+    </div>
+    <div class="card">
+      <h2>Maintenance Log</h2>
+      <div id="maintenance-body"></div>
+    </div>
+  </section>
+
+  <!-- LOG NEW ERROR -->
+  <section id="view-logerror" class="view">
+    <div id="logerror-locked" class="locked-notice" style="display:none;">
+      <b>Sign in required</b>
+      Sign in with your @memoryventures.com Google account (top right) to log a new error.
+    </div>
+    <div id="logerror-form-wrap" class="card" style="display:none;">
+      <h2>Log New Error</h2>
+      <div class="desc">Adds a row to Error_Log with Confirmation_Status set to "Pending Review"</div>
+      <form id="form-logerror">
+        <div class="form-grid">
+          <div class="field"><label>Incident Date <span class="req">*</span></label><input type="date" name="Incident_Date" required></div>
+          <div class="field"><label>Order ID</label><input type="text" name="OrderID" placeholder="e.g. KTM26AWFTCSE8"></div>
+          <div class="field"><label>Technician <span class="req">*</span></label><select name="Technician_Name" required><option value="">Select…</option></select></div>
+          <div class="field"><label>Error Classification <span class="req">*</span></label>
+            <select name="Error_Classification" required>
+              <option value="">Select…</option>
+              <option>Clerical Error</option>
+              <option>Critical Violation</option>
+              <option>Rescan / Order Error</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="field"><label>Standard Category</label>
+            <select name="Standard_Category">
+              <option value="">Select…</option>
+              <option>Wrong Shelving Assignment</option>
+              <option>Skipped/Missing Media Scans</option>
+              <option>Failure to Move Data</option>
+              <option>Incorrect Counts Entered</option>
+              <option>Damage Due to Negligence</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="field"><label>Affected Image Count</label><input type="number" name="Affected_Image_Count" min="0" step="1" value="0"></div>
+          <div class="field"><label>Sample Photo</label><input type="file" name="Sample_Image" accept="image/*"><div class="hint">Uploaded to Google Drive; a link is saved in Sample_Image.</div></div>
+          <div class="field full"><label>Detailed Description</label><textarea name="Detailed_Description" placeholder="What happened, and how it was caught…"></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Log Error</button>
+          <span class="form-msg" id="logerror-msg"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- LOG COACHING SESSION -->
+  <section id="view-logcoaching" class="view">
+    <div id="logcoaching-locked" class="locked-notice" style="display:none;">
+      <b>Sign in required</b>
+      Sign in with your @memoryventures.com Google account (top right) to log a coaching session.
+    </div>
+    <div id="logcoaching-form-wrap" class="card" style="display:none;">
+      <h2>Log Coaching Session</h2>
+      <div class="desc">Updates an existing Error_Log row's Coaching Status, Prevention Plan, and Lead Notes</div>
+      <form id="form-logcoaching">
+        <div class="form-grid">
+          <div class="field full"><label>Error <span class="req">*</span></label><select name="Error_ID" required><option value="">Select an error…</option></select></div>
+          <div class="field"><label>Coaching Status <span class="req">*</span></label>
+            <select name="Coaching_Status" required>
+              <option value="">Select…</option>
+              <option>Pending Discussion</option>
+              <option>Discussed - Complete</option>
+              <option>No Action Needed</option>
+            </select>
+          </div>
+          <div class="field"><label>Tech Prevention Plan</label><textarea name="Tech_Prevention_Plan" placeholder="What the tech will do differently…"></textarea></div>
+          <div class="field full"><label>Lead Coaching Notes</label><textarea name="Lead_Coaching_Notes" placeholder="Notes from the coaching conversation…"></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Save Coaching Session</button>
+          <span class="form-msg" id="logcoaching-msg"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- LOG ATTENDANCE -->
+  <section id="view-logattendance" class="view">
+    <div id="logattendance-locked" class="locked-notice" style="display:none;">
+      <b>Sign in required</b>
+      Sign in with your @memoryventures.com Google account (top right) to log attendance.
+    </div>
+    <div id="logattendance-form-wrap" class="card" style="display:none;">
+      <h2>Log Attendance</h2>
+      <div class="desc">Adds a row to Attendance_Log</div>
+      <form id="form-logattendance">
+        <div class="form-grid">
+          <div class="field"><label>Work Date <span class="req">*</span></label><input type="date" name="Work_Date" required></div>
+          <div class="field"><label>Technician <span class="req">*</span></label><select name="Technician_Name" required><option value="">Select…</option></select></div>
+          <div class="field"><label>Hours Missed <span class="req">*</span></label><input type="number" name="Hours_Missed" min="0" step="0.25" value="8" required></div>
+          <div class="field"><label>Absence Type <span class="req">*</span></label>
+            <select name="Absence_Type" required>
+              <option value="">Select…</option>
+              <option>Unexcused / Call-Out</option>
+              <option>Partial Shift</option>
+            </select>
+          </div>
+          <div class="field"><label style="display:flex;align-items:center;gap:8px;font-weight:600;"><input type="checkbox" name="Pre_Planned_Exclusion" style="width:auto;"> Pre-planned exclusion</label></div>
+          <div class="field full"><label>Notes</label><textarea name="Notes" placeholder="Context for this absence…"></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Log Attendance</button>
+          <span class="form-msg" id="logattendance-msg"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- ADD ASSET -->
+  <section id="view-addasset" class="view">
+    <div id="addasset-locked" class="locked-notice" style="display:none;">
+      <b>Sign in required</b>
+      Sign in with your @memoryventures.com Google account (top right) to add equipment.
+    </div>
+    <div id="addasset-form-wrap" class="card" style="display:none;">
+      <h2>Add Asset</h2>
+      <div class="desc">Adds a row to Equipment with Status set to "Operational"</div>
+      <form id="form-addasset">
+        <div class="form-grid">
+          <div class="field"><label>Model</label><input type="text" name="Model" placeholder="e.g. Slide Snap PRO"></div>
+          <div class="field"><label>Type <span class="req">*</span></label><input type="text" name="Type" required placeholder="e.g. Scanner"></div>
+          <div class="field"><label>Station <span class="req">*</span></label><select name="Current_Station_ID" required><option value="">Select…</option></select></div>
+          <div class="field"><label>Purchase Price</label><input type="number" name="Purchase_Price" min="0" step="0.01" placeholder="0.00"></div>
+          <div class="field"><label>Purchase Date</label><input type="date" name="Purchase_Date"></div>
+          <div class="field"><label>In Service Date</label><input type="date" name="In_Service_Date"></div>
+          <div class="field"><label>Expected Lifecycle (months)</label><input type="number" name="Expected_Lifecycle_Months" min="0" step="1" value="24"></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Add Asset</button>
+          <span class="form-msg" id="addasset-msg"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- LOG EQUIPMENT ISSUE -->
+  <section id="view-logequipissue" class="view">
+    <div id="logequipissue-locked" class="locked-notice" style="display:none;">
+      <b>Sign in required</b>
+      Sign in with your @memoryventures.com Google account (top right) to log an equipment issue.
+    </div>
+    <div id="logequipissue-form-wrap" class="card" style="display:none;">
+      <h2>Log Equipment Issue</h2>
+      <div class="desc">Adds a row to Maintenance_Log for the selected asset</div>
+      <form id="form-logequipissue">
+        <div class="form-grid">
+          <div class="field"><label>Asset <span class="req">*</span></label><select name="Asset_ID" required><option value="">Select…</option></select></div>
+          <div class="field"><label>Log Date <span class="req">*</span></label><input type="date" name="Log_Date" required></div>
+          <div class="field"><label>Type <span class="req">*</span></label>
+            <select name="Type" required>
+              <option value="">Select…</option>
+              <option>Issue Reported</option>
+              <option>Repair</option>
+              <option>Preventive Maintenance</option>
+              <option>Inspection</option>
+            </select>
+          </div>
+          <div class="field"><label>Cost</label><input type="number" name="Cost" min="0" step="0.01" placeholder="0.00"></div>
+          <div class="field full"><label>Notes</label><textarea name="Notes" placeholder="What's wrong, what was done…"></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Log Issue</button>
+          <span class="form-msg" id="logequipissue-msg"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+</main>
+
+<footer>Scan Tech Error &amp; Bonus Tracker — prototype dashboard, reads directly from the source Google Sheet</footer>
+
+<div class="modal-overlay" id="profile-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="profile-name">Technician</h2>
+      <span class="modal-close" id="profile-close">&times;</span>
+    </div>
+    <div class="modal-body" id="profile-body"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="asset-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="asset-name">Asset</h2>
+      <span class="modal-close" id="asset-close">&times;</span>
+    </div>
+    <div class="modal-body" id="asset-body"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="error-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="error-title">Error</h2>
+      <span class="modal-close" id="error-close">&times;</span>
+    </div>
+    <div class="modal-body" id="error-body"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="category-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="category-title">Category</h2>
+      <span class="modal-close" id="category-close">&times;</span>
+    </div>
+    <div class="modal-body" id="category-body"></div>
+  </div>
+</div>
+
+<script>
+const SHEET_ID = "17WGOoDNKTDskVziCQebpcKDWgx9v_kLJ1jncw1-FdSc";
+
+// Loaded via a <script> tag (JSONP-style), not fetch() — this is Google's own
+// supported mechanism for the Visualization API and is NOT subject to CORS,
+// so it works identically whether this file is opened locally (file://),
+// from a plain web server, or hosted on GitHub Pages. A regular fetch() to
+// docs.google.com from a file:// page gets silently blocked by the browser
+// as a cross-origin request, which is why an earlier version of this file
+// showed no data when opened by double-clicking it.
+let __jsonpCounter = 0;
+
+function jsonpUrl(tab, cbName){
+  const tqx = `out:json;responseHandler:${cbName}`;
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=${encodeURIComponent(tqx)}&sheet=${encodeURIComponent(tab)}&cb=${Date.now()}`;
+}
+
+function gvizToObjects(table){
+  const headers = (table.cols || []).map(c => c.label || c.id || '');
+  return (table.rows || []).map(r => {
+    const obj = {};
+    headers.forEach((h,i) => {
+      const cell = r.c ? r.c[i] : null;
+      if (!cell){ obj[h] = ''; return; }
+      // Prefer the formatted display string (f) — it matches what the sheet
+      // itself shows (e.g. "100.00%", "8/10/2026"), same as what a CSV
+      // export would give. Fall back to the raw value if no formatted one.
+      const val = (cell.f !== undefined && cell.f !== null) ? cell.f : cell.v;
+      obj[h] = (val === undefined || val === null) ? '' : String(val);
+    });
+    return obj;
+  });
+}
+
+function fetchTab(tab){
+  return new Promise((resolve, reject) => {
+    const cbName = `__gvizCb${__jsonpCounter++}`;
+    const timer = setTimeout(() => { cleanup(); reject(new Error(`Timed out loading "${tab}"`)); }, 15000);
+    function cleanup(){
+      clearTimeout(timer);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+    window[cbName] = function(resp){
+      cleanup();
+      try {
+        if (!resp || resp.status === 'error'){
+          const msg = resp && resp.errors && resp.errors[0] && resp.errors[0].detailed_message;
+          reject(new Error(msg || `Error loading "${tab}"`));
+          return;
+        }
+        resolve(gvizToObjects(resp.table));
+      } catch (e){ reject(e); }
+    };
+    const script = document.createElement('script');
+    script.src = jsonpUrl(tab, cbName);
+    script.onerror = () => { cleanup(); reject(new Error(`Failed to load "${tab}" (script/network error)`)); };
+    document.body.appendChild(script);
+  });
+}
+
+function esc(s){
+  return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+
+function statusBadge(status){
+  const s = (status || '').toLowerCase();
+  if (s.includes('eligible') && s.includes('100')) return `<span class="badge green">${esc(status)}</span>`;
+  if (s.includes('eligible')) return `<span class="badge amber">${esc(status)}</span>`;
+  if (s.includes('forfeited')) return `<span class="badge red">${esc(status)}</span>`;
+  if (s.includes('pending')) return `<span class="badge amber">${esc(status)}</span>`;
+  if (s.includes('confirmed')) return `<span class="badge grey">${esc(status)}</span>`;
+  if (!status) return `<span class="badge grey">—</span>`;
+  return `<span class="badge grey">${esc(status)}</span>`;
+}
+
+function classificationBadge(c){
+  const s = (c || '').toLowerCase();
+  if (s.includes('critical')) return `<span class="badge red">${esc(c)}</span>`;
+  if (s.includes('rescan')) return `<span class="badge amber">${esc(c)}</span>`;
+  if (!c) return '—';
+  return `<span class="badge grey">${esc(c)}</span>`;
+}
+
+function techLink(name){
+  if (!name) return '—';
+  return `<span class="tech-link" data-tech="${esc(name)}">${esc(name)}</span>`;
+}
+
+function assetLink(id, label){
+  if (!id) return '—';
+  return `<span class="tech-link" data-asset="${esc(id)}">${esc(label || id)}</span>`;
+}
+
+function sampleImageCell(v){
+  if (!v) return '—';
+  if (/^https?:\/\//i.test(v)){
+    return `<a href="${esc(v)}" target="_blank" rel="noopener"><img src="${esc(v)}" alt="photo" style="width:36px;height:36px;object-fit:cover;border-radius:6px;border:1px solid var(--border);"></a>`;
+  }
+  return `<span class="badge grey" title="Legacy AppSheet file path — not viewable from this app">${esc(v.split('/').pop())}</span>`;
+}
+
+function parseScore(s){
+  if (!s) return null;
+  if (s.includes('%')) return parseFloat(s) / 100;
+  const n = parseFloat(s);
+  return isNaN(n) ? null : n;
+}
+
+// Scores are stored as a decimal multiplier (1.0 = 100% of expected pace).
+// Always display them as a percentage, capped at 1 decimal place.
+function fmtPct(v){
+  if (v === null || v === undefined || isNaN(v)) return '—';
+  return (v * 100).toFixed(1) + '%';
+}
+
+// Same as fmtPct, but takes a raw sheet cell string (handles both "1.15"
+// and "114.14%" source formats via parseScore).
+function fmtScoreStr(s){
+  return fmtPct(parseScore(s));
+}
+
+function buildTable(el, columns, rows, rowRenderer){
+  if (!rows.length){
+    el.innerHTML = `<tbody><tr><td class="empty">No rows found.</td></tr></tbody>`;
+    return;
+  }
+  const thead = `<thead><tr>${columns.map(c => `<th>${esc(c.label)}</th>`).join('')}</tr></thead>`;
+  const tbody = `<tbody>${rows.map(rowRenderer).join('')}</tbody>`;
+  el.innerHTML = thead + tbody;
+}
+
+function fmtDate(d){
+  if (!d) return '—';
+  return d;
+}
+
+let DATA = {};
+
+async function loadAll(){
+  const tabs = ['Error_Log','Technicians','Attendance_Log','Monthly_Bonus_Summary','Tech_Scores','Equipment','Stations','Maintenance_Log'];
+  const results = await Promise.all(tabs.map(t => fetchTab(t).catch(err => ({__error: err.message, __tab: t}))));
+  const failed = [];
+  tabs.forEach((t,i) => {
+    const r = results[i];
+    if (r && r.__error){ failed.push(r.__tab); DATA[t] = []; }
+    else DATA[t] = r;
+  });
+  if (failed.length){
+    const box = document.getElementById('load-error');
+    box.style.display = 'block';
+    box.textContent = `Could not load: ${failed.join(', ')}. Showing partial data — try Refresh.`;
+  } else {
+    document.getElementById('load-error').style.display = 'none';
+  }
+  document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleString();
+  render();
+}
+
+function render(){
+  renderOverview();
+  renderPending();
+  renderErrorLog();
+  renderBonus();
+  renderAttendance();
+  renderEquipment();
+  populateFormDropdowns();
+}
+
+// ---------- Flexible date parsing (Tech_Scores mixes several formats) ----------
+function parseFlexDate(s){
+  s = (s || '').trim();
+  if (!s) return null;
+  let m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); // M/D/YYYY
+  if (m) return new Date(+m[3], +m[1]-1, +m[2]);
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/); // YYYY-MM-DD
+  if (m) return new Date(+m[1], +m[2]-1, +m[3]);
+  m = s.match(/^(\d{1,2})-([A-Za-z]{3})$/); // D-Mon (assume current year)
+  if (m){
+    const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
+    const mon = months[m[2]];
+    if (mon !== undefined) return new Date(new Date().getFullYear(), mon, +m[1]);
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function weekStartMonday(d){
+  const day = d.getDay(); // 0=Sun..6=Sat
+  const diff = (day === 0 ? -6 : 1) - day;
+  const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() + diff);
+  return monday;
+}
+
+function fmtShort(d){ return `${d.getMonth()+1}/${d.getDate()}`; }
+
+function computeWeeklyScores(name, numWeeks){
+  const rows = (DATA.Tech_Scores || []).filter(s => s.Name === name);
+  const byWeek = {};
+  rows.forEach(s => {
+    const d = parseFlexDate(s.Date);
+    if (!d) return;
+    const ws = weekStartMonday(d).getTime();
+    const v = parseScore(s.Score);
+    if (v === null) return;
+    if (!byWeek[ws]) byWeek[ws] = { sum: 0, n: 0 };
+    byWeek[ws].sum += v; byWeek[ws].n += 1;
+  });
+  const todayWs = weekStartMonday(new Date()).getTime();
+  const oneWeek = 7 * 24 * 60 * 60 * 1000;
+  const out = [];
+  for (let i = 0; i < numWeeks; i++){
+    const ws = todayWs - i * oneWeek;
+    const bucket = byWeek[ws];
+    const start = new Date(ws);
+    const end = new Date(ws + 6 * 24 * 60 * 60 * 1000);
+    out.push({
+      label: (i === 0 ? 'This week ' : '') + `${fmtShort(start)}–${fmtShort(end)}`,
+      avg: bucket ? bucket.sum / bucket.n : null,
+      n: bucket ? bucket.n : 0
+    });
+  }
+  return out;
+}
+
+// ---------- Technician profile modal ----------
+function openProfile(name){
+  const errors = (DATA.Error_Log || []).filter(e => e.Technician_Name === name).reverse();
+  const attendance = (DATA.Attendance_Log || []).filter(a => a.Technician_Name === name).reverse();
+  const bonus = (DATA.Monthly_Bonus_Summary || []).find(b => b.Technician === name);
+  const weeks = computeWeeklyScores(name, 5);
+
+  document.getElementById('profile-name').textContent = name;
+  const body = document.getElementById('profile-body');
+
+  const bonusHtml = bonus ? `
+    <div class="two-col">
+      <div class="card">
+        <h2>Prior month (${esc(bonus['Month/Year'])})</h2>
+        <div class="kpi-row">
+          <div class="kpi"><div class="label">Status</div><div class="value" style="font-size:15px;">${statusBadge(bonus['Final Bonus Status'])}</div></div>
+          <div class="kpi"><div class="label">Base Bonus</div><div class="value">$${esc(bonus['Base Bonus Amount'])}</div></div>
+          <div class="kpi"><div class="label">Adjusted Final Bonus</div><div class="value">$${esc(bonus['Adjusted Final Bonus'])}</div></div>
+        </div>
+        <div style="margin-top:10px;font-size:12.5px;color:var(--muted);">
+          Clerical errors: ${esc(bonus['Clerical Errors'])} (${esc(bonus['Clerical Reduction %'])} reduction) ·
+          Order errors: ${esc(bonus['Order Errors'])} · Critical violations: ${esc(bonus['Critical Violations'])} ·
+          Attendance: ${esc(bonus['Rolling Attendance %'])}
+        </div>
+      </div>
+      <div class="card">
+        <h2>Month to date</h2>
+        <div class="kpi-row">
+          <div class="kpi"><div class="label">MTD Score</div><div class="value">${fmtScoreStr(bonus['MTD Score'])}</div></div>
+          <div class="kpi"><div class="label">MTD Base Bonus</div><div class="value">$${esc(bonus['MTD Base Bonus'])}</div></div>
+          <div class="kpi"><div class="label">MTD Projected Final Bonus</div><div class="value">$${esc(bonus['MTD Projected Final Bonus'])}</div></div>
+        </div>
+      </div>
+    </div>` : `<div class="empty">No bonus summary row found for ${esc(name)} yet.</div>`;
+
+  const weeksHtml = `
+    <div class="card">
+      <h2>Weekly scores</h2>
+      <div class="desc">Current week plus previous 4 weeks (Mon–Sun), averaged from Tech_Scores</div>
+      ${weeks.map(w => `
+        <div class="bar-row">
+          <div class="name">${esc(w.label)}</div>
+          <div class="bar-track"><div class="bar-fill" style="width:${w.avg !== null ? Math.min(100, w.avg/1.5*100).toFixed(0) : 0}%;background:${w.avg === null ? '#ccc' : (w.avg >= 1 ? '#1a7f37' : '#a15c00')};"></div></div>
+          <div class="val">${fmtPct(w.avg)}</div>
+        </div>`).join('')}
+    </div>`;
+
+  body.innerHTML = bonusHtml + weeksHtml + `
+    <div class="card">
+      <h2>Error history (${errors.length})</h2>
+      <div style="overflow-x:auto"><table id="profile-errors-table"></table></div>
+    </div>
+    <div class="card">
+      <h2>Attendance history (${attendance.length})</h2>
+      <div style="overflow-x:auto"><table id="profile-attendance-table"></table></div>
+    </div>`;
+
+  buildTable(document.getElementById('profile-errors-table'),
+    [{label:'Date'},{label:'Order ID'},{label:'Category'},{label:'Description'},{label:'Photo'},{label:'Status'}],
+    errors,
+    e => `<tr class="clickable-row" data-error-id="${esc(e.Error_ID)}"><td>${esc(e.Incident_Date)}</td><td>${esc(e['Order ID'])}</td><td>${esc(e.Standard_Category)}</td><td>${esc(e.Detailed_Description)}</td><td>${sampleImageCell(e.Sample_Image)}</td><td>${statusBadge(e.Confirmation_Status)}</td></tr>`);
+
+  buildTable(document.getElementById('profile-attendance-table'),
+    [{label:'Work Date'},{label:'Hours'},{label:'Type'},{label:'Notes'}],
+    attendance,
+    a => `<tr><td>${esc(a.Work_Date)}</td><td>${esc(a.Hours_Missed)}</td><td>${esc(a.Absence_Type)}</td><td>${esc(a.Notes)}</td></tr>`);
+
+  document.getElementById('profile-modal').style.display = 'flex';
+}
+
+function closeProfile(){ document.getElementById('profile-modal').style.display = 'none'; }
+
+document.addEventListener('click', (e) => {
+  const techEl = e.target.closest('.tech-link[data-tech]');
+  if (techEl){ openProfile(techEl.dataset.tech); return; }
+  const assetEl = e.target.closest('.tech-link[data-asset]');
+  if (assetEl){ openAssetProfile(assetEl.dataset.asset); return; }
+  const catEl = e.target.closest('.cat-link[data-cat]');
+  if (catEl){ openCategoryDetail(catEl.dataset.cat); return; }
+  if (e.target.closest('a')) return; // let photo links behave normally, don't also open the row
+  const errRow = e.target.closest('tr[data-error-id]');
+  if (errRow){ openErrorDetail(errRow.dataset.errorId); return; }
+});
+document.getElementById('profile-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'profile-modal' || e.target.id === 'profile-close') closeProfile();
+});
+document.getElementById('error-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'error-modal' || e.target.id === 'error-close') closeErrorDetail();
+});
+document.getElementById('category-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'category-modal' || e.target.id === 'category-close') closeCategoryDetail();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape'){ closeProfile(); closeAssetProfile(); closeErrorDetail(); closeCategoryDetail(); }
+});
+
+// ---------- Error detail modal ----------
+function openErrorDetail(errorId){
+  const e = (DATA.Error_Log || []).find(r => r.Error_ID === errorId);
+  document.getElementById('error-title').textContent = errorId;
+  const body = document.getElementById('error-body');
+  if (!e){
+    body.innerHTML = `<div class="empty">Couldn't find this error — try Refresh.</div>`;
+    document.getElementById('error-modal').style.display = 'flex';
+    return;
+  }
+  const photo = e.Sample_Image && /^https?:\/\//i.test(e.Sample_Image)
+    ? `<a href="${esc(e.Sample_Image)}" target="_blank" rel="noopener"><img src="${esc(e.Sample_Image)}" alt="photo" style="max-width:100%;max-height:320px;border-radius:8px;border:1px solid var(--border);"></a>`
+    : (e.Sample_Image ? `<span class="badge grey">${esc(e.Sample_Image.split('/').pop())}</span> (legacy file — not viewable here)` : '<span class="empty">No photo attached.</span>');
+
+  body.innerHTML = `
+    <div class="detail-grid">
+      <div><div class="k">Incident Date</div><div class="v">${esc(e.Incident_Date)}</div></div>
+      <div><div class="k">Logged</div><div class="v">${esc(e.Timestamp)} by ${esc(e.Logged_By)}</div></div>
+      <div><div class="k">Order ID</div><div class="v">${esc(e['Order ID']) || '—'}</div></div>
+      <div><div class="k">Technician</div><div class="v">${techLink(e.Technician_Name)}</div></div>
+      <div><div class="k">Classification</div><div class="v">${classificationBadge(e.Error_Classification)}</div></div>
+      <div><div class="k">Standard Category</div><div class="v">${esc(e.Standard_Category) || '—'}</div></div>
+      <div><div class="k">Affected Image Count</div><div class="v">${esc(e.Affected_Image_Count) || '0'}</div></div>
+      <div><div class="k">Confirmation Status</div><div class="v">${statusBadge(e.Confirmation_Status)}</div></div>
+      <div class="full"><div class="k">Detailed Description</div><div class="v">${esc(e.Detailed_Description) || '—'}</div></div>
+      <div class="full"><div class="k">Sample Photo</div><div class="v">${photo}</div></div>
+      <div class="full"><div class="k">Reviewer Notes</div><div class="v">${esc(e.Reviewer_Notes) || '—'}</div></div>
+      <div><div class="k">Bonus Impact Confirmed</div><div class="v">${esc(e.Bonus_Impact_Confirmed) || '—'}</div></div>
+      <div><div class="k">Coaching Status</div><div class="v">${e['Coaching Status'] ? statusBadge(e['Coaching Status']) : '—'}</div></div>
+      <div class="full"><div class="k">Tech Prevention Plan</div><div class="v">${esc(e.Tech_Prevention_Plan) || '—'}</div></div>
+      <div class="full"><div class="k">Lead Coaching Notes</div><div class="v">${esc(e.Lead_Coaching_Notes) || '—'}</div></div>
+    </div>`;
+  document.getElementById('error-modal').style.display = 'flex';
+}
+
+function closeErrorDetail(){ document.getElementById('error-modal').style.display = 'none'; }
+
+// ---------- Category detail modal ----------
+function categoryTechBreakdown(category){
+  const counts = {};
+  (DATA.Error_Log || []).filter(e => (e.Standard_Category || 'Uncategorized') === category).forEach(e => {
+    const n = e.Technician_Name || 'Unknown';
+    counts[n] = (counts[n] || 0) + 1;
+  });
+  return Object.entries(counts).sort((a,b) => b[1]-a[1]);
+}
+
+function openCategoryDetail(category){
+  const rows = (DATA.Error_Log || []).filter(e => (e.Standard_Category || 'Uncategorized') === category).reverse();
+  document.getElementById('category-title').textContent = category;
+  const body = document.getElementById('category-body');
+  body.innerHTML = `
+    <div class="card">
+      <h2>By technician</h2>
+      <div id="cat-detail-bars"></div>
+    </div>
+    <div class="card">
+      <h2>Errors in this category (${rows.length})</h2>
+      <div style="overflow-x:auto"><table id="cat-detail-table"></table></div>
+    </div>`;
+  const breakdown = categoryTechBreakdown(category);
+  const maxN = Math.max(1, ...breakdown.map(b => b[1]));
+  document.getElementById('cat-detail-bars').innerHTML = breakdown.length ? breakdown.map(([name,count]) => `
+    <div class="bar-row">
+      <div class="name">${techLink(name)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(count/maxN*100).toFixed(0)}%;background:#2f6feb;"></div></div>
+      <div class="val">${count}</div>
+    </div>`).join('') : '<div class="empty">No data.</div>';
+
+  buildTable(document.getElementById('cat-detail-table'),
+    [{label:'Date'},{label:'Technician'},{label:'Description'},{label:'Photo'},{label:'Status'}],
+    rows,
+    e => `<tr class="clickable-row" data-error-id="${esc(e.Error_ID)}"><td>${esc(e.Incident_Date)}</td><td>${techLink(e.Technician_Name)}</td><td>${esc(e.Detailed_Description)}</td><td>${sampleImageCell(e.Sample_Image)}</td><td>${statusBadge(e.Confirmation_Status)}</td></tr>`);
+
+  document.getElementById('category-modal').style.display = 'flex';
+}
+
+function closeCategoryDetail(){ document.getElementById('category-modal').style.display = 'none'; }
+
+// ---------- OVERVIEW ----------
+function renderOverview(){
+  const errors = DATA.Error_Log || [];
+  const techs = DATA.Technicians || [];
+  const bonus = DATA.Monthly_Bonus_Summary || [];
+  const scores = DATA.Tech_Scores || [];
+
+  const pendingReview = errors.filter(e => (e.Confirmation_Status||'').toLowerCase() === 'pending review').length;
+  const pendingDiscussion = errors.filter(e => (e['Coaching Status']||'').toLowerCase().includes('pending')).length;
+  const critical = errors.filter(e => (e.Error_Classification||'').toLowerCase().includes('critical')).length;
+  const avgAttendance = techs.length ? (techs.reduce((s,t) => s + (parseFloat(t.Rolling_Attendance_Pct)||0), 0) / techs.length * 100) : null;
+
+  let eligible = 0, forfeited = 0, latestPeriod = '';
+  if (bonus.length){
+    latestPeriod = bonus[0]['Month/Year'];
+    bonus.filter(b => b['Month/Year'] === latestPeriod).forEach(b => {
+      const s = (b['Final Bonus Status']||'').toLowerCase();
+      if (s.includes('eligible')) eligible++; else if (s.includes('forfeited')) forfeited++;
+    });
+  }
+
+  const kpis = [
+    { label: 'Total errors logged', value: errors.length, note: 'All time, Error_Log' },
+    { label: 'Pending review', value: pendingReview, note: pendingDiscussion ? `+${pendingDiscussion} pending coaching discussion` : 'Awaiting confirmation' },
+    { label: 'Critical violations', value: critical, note: 'All time' },
+    { label: 'Avg. rolling attendance', value: avgAttendance !== null ? avgAttendance.toFixed(1) + '%' : '—', note: `${techs.length} active technicians` },
+    { label: `Bonus eligible (${latestPeriod || 'latest month'})`, value: eligible, note: `${forfeited} forfeited` },
+  ];
+  document.getElementById('kpi-row').innerHTML = kpis.map(k => `
+    <div class="kpi">
+      <div class="label">${esc(k.label)}</div>
+      <div class="value">${esc(k.value)}</div>
+      <div class="note">${esc(k.note)}</div>
+    </div>`).join('');
+
+  // Category breakdown
+  const catCounts = {};
+  errors.forEach(e => {
+    const c = e.Standard_Category || 'Uncategorized';
+    catCounts[c] = (catCounts[c]||0) + 1;
+  });
+  const catEntries = Object.entries(catCounts).sort((a,b) => b[1]-a[1]);
+  const maxCat = Math.max(1, ...catEntries.map(e => e[1]));
+  document.getElementById('category-bars').innerHTML = catEntries.length ? catEntries.map(([name,count]) => {
+    const breakdown = categoryTechBreakdown(name);
+    const tooltip = breakdown.length
+      ? breakdown.map(([tech,c]) => `<div>${esc(tech)}: ${c}</div>`).join('')
+      : '<div>No data</div>';
+    return `
+    <div class="bar-row cat-bar-row">
+      <div class="name cat-link" data-cat="${esc(name)}">${esc(name)}
+        <div class="cat-tooltip">${tooltip}</div>
+      </div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(count/maxCat*100).toFixed(0)}%;background:#2f6feb;"></div></div>
+      <div class="val">${count}</div>
+    </div>`;
+  }).join('') : '<div class="empty">No error data yet.</div>';
+
+  // Avg score per tech
+  const scoreSums = {};
+  scores.forEach(s => {
+    const v = parseScore(s.Score);
+    if (v === null || !s.Name) return;
+    if (!scoreSums[s.Name]) scoreSums[s.Name] = { sum: 0, n: 0 };
+    scoreSums[s.Name].sum += v; scoreSums[s.Name].n += 1;
+  });
+  const scoreAvgs = Object.entries(scoreSums).map(([name,d]) => [name, d.sum/d.n]).sort((a,b) => b[1]-a[1]);
+  const maxScore = Math.max(1.5, ...scoreAvgs.map(e => e[1]));
+  document.getElementById('score-bars').innerHTML = scoreAvgs.length ? scoreAvgs.map(([name,avg]) => `
+    <div class="bar-row">
+      <div class="name">${techLink(name)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(avg/maxScore*100).toFixed(0)}%;background:${avg>=1?'#1a7f37':'#a15c00'};"></div></div>
+      <div class="val">${fmtPct(avg)}</div>
+    </div>`).join('') : '<div class="empty">No score data yet.</div>';
+
+  // Recent errors table
+  const recent = [...errors].reverse().slice(0,8);
+  buildTable(document.getElementById('recent-errors-table'),
+    [{label:'Date'},{label:'Technician'},{label:'Category'},{label:'Description'},{label:'Status'}],
+    recent,
+    e => `<tr class="clickable-row" data-error-id="${esc(e.Error_ID)}">
+      <td>${esc(e.Incident_Date)}</td>
+      <td>${techLink(e.Technician_Name)}</td>
+      <td>${esc(e.Standard_Category)}</td>
+      <td>${esc((e.Detailed_Description||'').slice(0,90))}${(e.Detailed_Description||'').length>90?'…':''}</td>
+      <td>${statusBadge(e.Confirmation_Status)}</td>
+    </tr>`);
+}
+
+// ---------- PENDING ----------
+function renderPending(){
+  const errors = DATA.Error_Log || [];
+  const pending = errors.filter(e =>
+    (e.Confirmation_Status||'').toLowerCase() === 'pending review' ||
+    (e['Coaching Status']||'').toLowerCase().includes('pending')
+  );
+  buildTable(document.getElementById('pending-table'),
+    [{label:'Error ID'},{label:'Incident Date'},{label:'Technician'},{label:'Category'},{label:'Description'},{label:'Photo'},{label:'Confirmation'},{label:'Coaching'}],
+    pending,
+    e => `<tr class="clickable-row" data-error-id="${esc(e.Error_ID)}">
+      <td>${esc(e.Error_ID)}</td>
+      <td>${esc(e.Incident_Date)}</td>
+      <td>${techLink(e.Technician_Name)}</td>
+      <td>${esc(e.Standard_Category)}</td>
+      <td>${esc(e.Detailed_Description)}</td>
+      <td>${sampleImageCell(e.Sample_Image)}</td>
+      <td>${statusBadge(e.Confirmation_Status)}</td>
+      <td>${e['Coaching Status'] ? statusBadge(e['Coaching Status']) : '—'}</td>
+    </tr>`);
+}
+
+// ---------- ERROR LOG ----------
+function renderErrorLog(){
+  const errors = DATA.Error_Log || [];
+  const statusSel = document.getElementById('errorlog-status-filter');
+  const techSel = document.getElementById('errorlog-tech-filter');
+  if (statusSel.options.length <= 1){
+    [...new Set(errors.map(e => e.Confirmation_Status).filter(Boolean))].sort().forEach(s => {
+      const o = document.createElement('option'); o.value = s; o.textContent = s; statusSel.appendChild(o);
+    });
+    [...new Set(errors.map(e => e.Technician_Name).filter(Boolean))].sort().forEach(t => {
+      const o = document.createElement('option'); o.value = t; o.textContent = t; techSel.appendChild(o);
+    });
+    statusSel.onchange = renderErrorLogTable;
+    techSel.onchange = renderErrorLogTable;
+    document.getElementById('errorlog-search').oninput = renderErrorLogTable;
+  }
+  renderErrorLogTable();
+}
+
+function renderErrorLogTable(){
+  const errors = DATA.Error_Log || [];
+  const q = (document.getElementById('errorlog-search').value || '').toLowerCase();
+  const statusF = document.getElementById('errorlog-status-filter').value;
+  const techF = document.getElementById('errorlog-tech-filter').value;
+  const filtered = errors.filter(e => {
+    if (statusF && e.Confirmation_Status !== statusF) return false;
+    if (techF && e.Technician_Name !== techF) return false;
+    if (q){
+      const hay = `${e.Technician_Name} ${e['Order ID']} ${e.Detailed_Description} ${e.Standard_Category}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }).reverse();
+  buildTable(document.getElementById('errorlog-table'),
+    [{label:'Error ID'},{label:'Incident Date'},{label:'Order ID'},{label:'Technician'},{label:'Classification'},{label:'Category'},{label:'Description'},{label:'Photo'},{label:'Status'}],
+    filtered,
+    e => `<tr class="clickable-row" data-error-id="${esc(e.Error_ID)}">
+      <td>${esc(e.Error_ID)}</td>
+      <td>${esc(e.Incident_Date)}</td>
+      <td>${esc(e['Order ID'])}</td>
+      <td>${techLink(e.Technician_Name)}</td>
+      <td>${classificationBadge(e.Error_Classification)}</td>
+      <td>${esc(e.Standard_Category)}</td>
+      <td>${esc(e.Detailed_Description)}</td>
+      <td>${sampleImageCell(e.Sample_Image)}</td>
+      <td>${statusBadge(e.Confirmation_Status)}</td>
+    </tr>`);
+}
+
+// ---------- BONUS ----------
+function renderBonus(){
+  const bonus = DATA.Monthly_Bonus_Summary || [];
+  const period = bonus.length ? bonus[0]['Month/Year'] : null;
+  document.getElementById('bonus-period').textContent = period ? `Period: ${period}` : 'No bonus data available yet';
+  buildTable(document.getElementById('bonus-table'),
+    [{label:'Technician'},{label:'Clerical Errors'},{label:'Order Errors'},{label:'Critical Violations'},{label:'Attendance %'},{label:'Status'},{label:'Base Bonus'},{label:'Adjusted Final Bonus'}],
+    bonus,
+    b => `<tr>
+      <td>${techLink(b.Technician)}</td>
+      <td>${esc(b['Clerical Errors'])}</td>
+      <td>${esc(b['Order Errors'])}</td>
+      <td>${esc(b['Critical Violations'])}</td>
+      <td>${esc(b['Rolling Attendance %'])}</td>
+      <td>${statusBadge(b['Final Bonus Status'])}</td>
+      <td>$${esc(b['Base Bonus Amount'])}</td>
+      <td>$${esc(b['Adjusted Final Bonus'])}</td>
+    </tr>`);
+}
+
+// ---------- ATTENDANCE ----------
+function renderAttendance(){
+  const techs = DATA.Technicians || [];
+  const log = DATA.Attendance_Log || [];
+  const counts = {};
+  log.forEach(a => {
+    const n = a.Technician_Name;
+    if (!n) return;
+    if (!counts[n]) counts[n] = { count: 0, hours: 0 };
+    counts[n].count += 1;
+    counts[n].hours += parseFloat(a.Hours_Missed) || 0;
+  });
+  const rows = techs.slice().sort((a,b) => (parseFloat(a.Rolling_Attendance_Pct)||0) - (parseFloat(b.Rolling_Attendance_Pct)||0));
+  buildTable(document.getElementById('attendance-summary-table'),
+    [{label:'Technician'},{label:'Rolling Attendance %'},{label:'Logged Absences'},{label:'Hours Missed'}],
+    rows,
+    t => {
+      const pct = (parseFloat(t.Rolling_Attendance_Pct)||0) * 100;
+      const c = counts[t.Name] || { count: 0, hours: 0 };
+      const badge = pct < 95 ? `<span class="badge red">${pct.toFixed(1)}%</span>` : `<span class="badge green">${pct.toFixed(1)}%</span>`;
+      return `<tr>
+        <td>${techLink(t.Name)}</td>
+        <td>${badge}</td>
+        <td>${c.count}</td>
+        <td>${c.hours}</td>
+      </tr>`;
+    });
+
+  const recentLog = [...log].reverse().slice(0,15);
+  buildTable(document.getElementById('attendance-log-table'),
+    [{label:'Work Date'},{label:'Technician'},{label:'Hours'},{label:'Type'},{label:'Notes'}],
+    recentLog,
+    a => `<tr>
+      <td>${esc(a.Work_Date)}</td>
+      <td>${techLink(a.Technician_Name)}</td>
+      <td>${esc(a.Hours_Missed)}</td>
+      <td>${esc(a.Absence_Type)}</td>
+      <td>${esc(a.Notes)}</td>
+    </tr>`);
+}
+
+// ---------- EQUIPMENT ----------
+function renderEquipment(){
+  const equip = DATA.Equipment || [];
+  const stations = DATA.Stations || [];
+  const stationMap = {};
+  stations.forEach(s => stationMap[s.Station_ID] = s);
+  buildTable(document.getElementById('equipment-table'),
+    [{label:'Asset ID'},{label:'Model'},{label:'Type'},{label:'Station'},{label:'Department'},{label:'Status'},{label:'Purchase Date'}],
+    equip,
+    e => {
+      const st = stationMap[e.Current_Station_ID];
+      const statusCls = (e.Status||'').toLowerCase() === 'operational' ? 'green' : 'red';
+      return `<tr>
+        <td>${assetLink(e.Asset_ID)}</td>
+        <td>${esc(e.Model) || '—'}</td>
+        <td>${esc(e.Type)}</td>
+        <td>${esc(st ? st.Station_Name : e.Current_Station_ID)}</td>
+        <td>${esc(st ? st.Department : '')}</td>
+        <td><span class="badge ${statusCls}">${esc(e.Status)}</span></td>
+        <td>${esc(e.Purchase_Date) || '—'}</td>
+      </tr>`;
+    });
+
+  const maint = DATA.Maintenance_Log || [];
+  document.getElementById('maintenance-body').innerHTML = maint.length
+    ? `<div style="overflow-x:auto"><table id="maint-table"></table></div>`
+    : `<div class="empty">No maintenance records logged yet.</div>`;
+  if (maint.length){
+    buildTable(document.getElementById('maint-table'),
+      [{label:'Log ID'},{label:'Asset ID'},{label:'Date'},{label:'Type'},{label:'Lead'},{label:'Notes'},{label:'Cost'}],
+      maint,
+      m => `<tr>
+        <td>${esc(m.Log_ID)}</td><td>${esc(m.Asset_ID)}</td><td>${esc(m.Log_Date)}</td>
+        <td>${esc(m.Type)}</td><td>${esc(m.Technician_Lead)}</td><td>${esc(m.Notes)}</td><td>${esc(m.Cost)}</td>
+      </tr>`);
+  }
+}
+
+// ---------- TABS ----------
+document.getElementById('tabs').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-view]');
+  if (!btn) return;
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById('view-' + btn.dataset.view).classList.add('active');
+});
+
+document.getElementById('refresh-link').addEventListener('click', () => {
+  document.getElementById('last-updated').textContent = 'Refreshing…';
+  loadAll();
+});
+
+// ===================== WRITE-BACK: AUTH + FORMS =====================
+//
+// SETUP NEEDED BEFORE THIS WORKS:
+//   1. Create a free OAuth Client ID in Google Cloud Console (APIs & Services
+//      > Credentials > Create Credentials > OAuth client ID > Web application).
+//   2. Add this file's hosted URL (e.g. your GitHub Pages URL, and
+//      http://localhost:PORT if testing locally with a server) under
+//      "Authorized JavaScript origins". Note: file:// won't work for this
+//      part — the write flow needs a real http(s) origin, unlike the
+//      read-only dashboard above.
+//   3. Enable BOTH the "Google Sheets API" and the "Google Drive API" for
+//      that Cloud project (Drive is needed for the error-photo upload).
+//   4. Paste the Client ID into CLIENT_ID below.
+//   5. Share the Google Sheet itself (Editor access) with everyone in
+//      ALLOWED_EMAILS — the allowlist below is just a friendly UI check,
+//      the real security boundary is the Sheet's own sharing settings.
+//   6. Optional: create a Google Drive folder for error photos yourself and
+//      paste its ID into DRIVE_FOLDER_ID below. If you leave it blank, the
+//      app creates a folder called "Scan Tech Error Images" the first time
+//      anyone uploads a photo, and remembers its ID in that browser's
+//      localStorage from then on.
+//   7. Since this app uses the Drive scope, Google's OAuth consent screen
+//      will need your 4 approved emails added as "test users" (Cloud
+//      Console > APIs & Services > OAuth consent screen) unless/until you
+//      publish the app for verification — fine for a small internal tool.
+//
+const CLIENT_ID = "1011466608923-hppkoj2kqal8ggtihfnq5g4d8dm1664q.apps.googleusercontent.com";
+const DRIVE_FOLDER_ID = ""; // optional — see setup note above
+const ALLOWED_EMAILS = [
+  'mwilder@memoryventures.com',
+  'jea@memoryventures.com',
+  'jessica@memoryventures.com',
+  'ops@memoryventures.com'
+];
+const SHEETS_SCOPE = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile';
+const SHEETS_API = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}`;
+const DRIVE_API = 'https://www.googleapis.com/drive/v3';
+const DRIVE_UPLOAD_API = 'https://www.googleapis.com/upload/drive/v3/files';
+
+let currentUser = null; // { email, name, picture, accessToken }
+let tokenClient = null;
+
+function initGIS(){
+  // Lock the write forms immediately, regardless of what happens below —
+  // otherwise, on a page load where sign-in isn't ready yet (or isn't
+  // configured yet), the locked-notice AND the form both stay at their
+  // default display:none and the tab just looks blank.
+  lockForms(true);
+
+  if (CLIENT_ID.startsWith('PASTE_')){
+    document.getElementById('auth-area').innerHTML = `<span style="font-size:12px;color:#f2b8b8;" title="See the setup comment near the top of the WRITE-BACK script section">Sign-in not configured yet</span>`;
+    return;
+  }
+  if (typeof google === 'undefined' || !google.accounts){
+    setTimeout(initGIS, 300);
+    return;
+  }
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID,
+    scope: SHEETS_SCOPE,
+    callback: onTokenResponse
+  });
+  renderSignedOutUI();
+}
+
+function renderSignedOutUI(){
+  document.getElementById('auth-area').innerHTML = `<button class="g-btn" id="signin-btn">Sign in with Google</button>`;
+  document.getElementById('signin-btn').addEventListener('click', () => tokenClient.requestAccessToken({ prompt: 'consent' }));
+  lockForms(true);
+}
+
+async function onTokenResponse(resp){
+  if (resp.error){
+    alert('Sign-in failed: ' + resp.error);
+    return;
+  }
+  const accessToken = resp.access_token;
+  try {
+    const r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${accessToken}` } });
+    const info = await r.json();
+    if (!ALLOWED_EMAILS.includes((info.email || '').toLowerCase())){
+      alert(`${info.email} isn't on the approved list for this app. Ask Mark to add you.`);
+      renderSignedOutUI();
+      return;
+    }
+    currentUser = { email: info.email, name: info.name, picture: info.picture, accessToken };
+    renderSignedInUI();
+    lockForms(false);
+  } catch (e){
+    alert('Could not verify your Google account: ' + e.message);
+  }
+}
+
+function renderSignedInUI(){
+  document.getElementById('auth-area').innerHTML = `
+    <div class="user-chip">
+      <img src="${esc(currentUser.picture || '')}" onerror="this.style.display='none'">
+      <span>${esc(currentUser.name || currentUser.email)}</span>
+      <span class="signout" id="signout-btn">Sign out</span>
+    </div>`;
+  document.getElementById('signout-btn').addEventListener('click', signOut);
+}
+
+function signOut(){
+  if (currentUser && currentUser.accessToken && google.accounts.oauth2.revoke){
+    google.accounts.oauth2.revoke(currentUser.accessToken, () => {});
+  }
+  currentUser = null;
+  renderSignedOutUI();
+}
+
+function lockForms(locked){
+  ['logerror','logcoaching','logattendance','addasset','logequipissue'].forEach(name => {
+    const lockedEl = document.getElementById(`${name}-locked`);
+    const formEl = document.getElementById(`${name}-form-wrap`);
+    if (lockedEl) lockedEl.style.display = locked ? 'block' : 'none';
+    if (formEl) formEl.style.display = locked ? 'none' : 'block';
+  });
+}
+
+window.addEventListener('load', initGIS);
+
+// ---------- Sheets API helpers ----------
+async function sheetsAppend(tabName, rowValues){
+  const range = encodeURIComponent(`${tabName}!A1`);
+  const res = await fetch(`${SHEETS_API}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${currentUser.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: [rowValues] })
+  });
+  if (!res.ok) throw new Error(`Sheets API error (HTTP ${res.status}) — ${await res.text()}`);
+  return res.json();
+}
+
+async function sheetsFindRow(tabName, idColLetter, idValue){
+  const range = encodeURIComponent(`${tabName}!${idColLetter}:${idColLetter}`);
+  const res = await fetch(`${SHEETS_API}/values/${range}`, { headers: { Authorization: `Bearer ${currentUser.accessToken}` } });
+  if (!res.ok) throw new Error(`Could not read ${tabName} (HTTP ${res.status})`);
+  const data = await res.json();
+  const rows = data.values || [];
+  for (let i = 0; i < rows.length; i++){
+    if ((rows[i][0] || '').trim() === idValue) return i + 1; // 1-indexed, includes header row
+  }
+  return -1;
+}
+
+async function sheetsUpdateRange(a1Range, rowValues){
+  const range = encodeURIComponent(a1Range);
+  const res = await fetch(`${SHEETS_API}/values/${range}?valueInputOption=USER_ENTERED`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${currentUser.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: [rowValues] })
+  });
+  if (!res.ok) throw new Error(`Sheets API error (HTTP ${res.status}) — ${await res.text()}`);
+  return res.json();
+}
+
+// ---------- Drive photo upload ----------
+let __appFolderId = null;
+
+async function getAppFolderId(){
+  if (DRIVE_FOLDER_ID) return DRIVE_FOLDER_ID;
+  if (__appFolderId) return __appFolderId;
+  const cached = localStorage.getItem('scanTechDriveFolderId');
+  if (cached){ __appFolderId = cached; return cached; }
+  const q = encodeURIComponent(`name='Scan Tech Error Images' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const res = await fetch(`${DRIVE_API}/files?q=${q}&fields=files(id,name)`, {
+    headers: { Authorization: `Bearer ${currentUser.accessToken}` }
+  });
+  const data = await res.json();
+  if (data.files && data.files.length){
+    __appFolderId = data.files[0].id;
+  } else {
+    const createRes = await fetch(`${DRIVE_API}/files`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${currentUser.accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'Scan Tech Error Images', mimeType: 'application/vnd.google-apps.folder' })
+    });
+    const created = await createRes.json();
+    __appFolderId = created.id;
+  }
+  localStorage.setItem('scanTechDriveFolderId', __appFolderId);
+  return __appFolderId;
+}
+
+// Uploads a File object to Drive, makes it link-viewable, and returns a
+// URL usable directly in an <img> tag. Returns '' if no file was passed.
+async function uploadImageToDrive(file){
+  if (!file) return '';
+  const folderId = await getAppFolderId();
+  const metadata = { name: `${Date.now()}_${file.name}`, parents: [folderId] };
+  const boundary = 'scantech' + Math.random().toString(16).slice(2);
+  const metaPart =
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n`;
+  const closeDelim = `\r\n--${boundary}--`;
+  const fileBuf = await file.arrayBuffer();
+  const body = new Blob([metaPart, `--${boundary}\r\nContent-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`, fileBuf, closeDelim]);
+
+  const res = await fetch(`${DRIVE_UPLOAD_API}?uploadType=multipart&fields=id`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${currentUser.accessToken}`, 'Content-Type': `multipart/related; boundary=${boundary}` },
+    body
+  });
+  if (!res.ok) throw new Error(`Photo upload failed (HTTP ${res.status}) — ${await res.text()}`);
+  const uploaded = await res.json();
+
+  // Make it viewable via link (anyone with the link — same access model as
+  // the rest of this dashboard's read side). Swap to a 'domain' permission
+  // if you'd rather restrict it to memoryventures.com.
+  await fetch(`${DRIVE_API}/files/${uploaded.id}/permissions`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${currentUser.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ role: 'reader', type: 'anyone' })
+  });
+
+  return `https://drive.google.com/uc?export=view&id=${uploaded.id}`;
+}
+
+function genId(){
+  return Array.from(crypto.getRandomValues(new Uint8Array(4))).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function nowTimestamp(){
+  const d = new Date();
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+// ---------- Populate form dropdowns from live data ----------
+function populateFormDropdowns(){
+  const techSel = document.querySelector('#form-logerror select[name="Technician_Name"]');
+  if (techSel && DATA.Technicians){
+    const cur = techSel.value;
+    techSel.innerHTML = '<option value="">Select…</option>' +
+      DATA.Technicians.filter(t => t.Status === 'Active').map(t => `<option>${esc(t.Name)}</option>`).join('');
+    techSel.value = cur;
+  }
+  const stationSel = document.querySelector('#form-addasset select[name="Current_Station_ID"]');
+  if (stationSel && DATA.Stations){
+    const cur = stationSel.value;
+    stationSel.innerHTML = '<option value="">Select…</option>' +
+      DATA.Stations.map(s => `<option value="${esc(s.Station_ID)}">${esc(s.Department)} — ${esc(s.Station_Name)} (${esc(s.Station_ID)})</option>`).join('');
+    stationSel.value = cur;
+  }
+  const attTechSel = document.querySelector('#form-logattendance select[name="Technician_Name"]');
+  if (attTechSel && DATA.Technicians){
+    const cur = attTechSel.value;
+    attTechSel.innerHTML = '<option value="">Select…</option>' +
+      DATA.Technicians.filter(t => t.Status === 'Active').map(t => `<option>${esc(t.Name)}</option>`).join('');
+    attTechSel.value = cur;
+  }
+  const equipDateInput = document.querySelector('#form-logequipissue input[name="Log_Date"]');
+  if (equipDateInput && !equipDateInput.value){
+    const t = new Date();
+    equipDateInput.value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  }
+  const assetSel = document.querySelector('#form-logequipissue select[name="Asset_ID"]');
+  if (assetSel && DATA.Equipment){
+    const cur = assetSel.value;
+    assetSel.innerHTML = '<option value="">Select…</option>' +
+      DATA.Equipment.map(a => `<option value="${esc(a.Asset_ID)}">${esc(a.Model || a.Type)} — ${esc(a.Asset_ID)} (${esc(a.Status)})</option>`).join('');
+    assetSel.value = cur;
+  }
+  const errSel = document.querySelector('#form-logcoaching select[name="Error_ID"]');
+  if (errSel && DATA.Error_Log){
+    const cur = errSel.value;
+    const rows = [...DATA.Error_Log].reverse();
+    errSel.innerHTML = '<option value="">Select an error…</option>' +
+      rows.map(e => `<option value="${esc(e.Error_ID)}">${esc(e.Error_ID)} — ${esc(e.Technician_Name)} — ${esc(e.Standard_Category || e.Error_Classification)} (${esc(e.Incident_Date)})</option>`).join('');
+    errSel.value = cur;
+  }
+}
+
+// ---------- Form submit handlers ----------
+document.getElementById('form-logerror').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('logerror-msg');
+  const btn = ev.target.querySelector('button[type=submit]');
+  const fd = new FormData(ev.target);
+  btn.disabled = true; msg.textContent = 'Saving…'; msg.className = 'form-msg';
+  try {
+    const photoFile = fd.get('Sample_Image');
+    let photoUrl = '';
+    if (photoFile && photoFile.size > 0){
+      msg.textContent = 'Uploading photo…';
+      photoUrl = await uploadImageToDrive(photoFile);
+      msg.textContent = 'Saving…';
+    }
+    const row = [
+      genId(), nowTimestamp(), currentUser.name || currentUser.email,
+      fd.get('Incident_Date'), fd.get('OrderID') || '', fd.get('Technician_Name'),
+      fd.get('Error_Classification'), fd.get('Standard_Category') || '',
+      fd.get('Detailed_Description') || '', photoUrl, fd.get('Affected_Image_Count') || '0',
+      'Pending Review', '', '', '', '', ''
+    ];
+    await sheetsAppend('Error_Log', row);
+    ev.target.reset();
+    await loadAll();
+    msg.textContent = 'Error logged successfully.'; msg.className = 'form-msg success';
+  } catch (err){
+    msg.textContent = err.message; msg.className = 'form-msg error';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('form-logcoaching').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('logcoaching-msg');
+  const btn = ev.target.querySelector('button[type=submit]');
+  const fd = new FormData(ev.target);
+  const errorId = fd.get('Error_ID');
+  btn.disabled = true; msg.textContent = 'Saving…'; msg.className = 'form-msg';
+  try {
+    if (!errorId) throw new Error('Pick which error this coaching session is for.');
+    const rowNum = await sheetsFindRow('Error_Log', 'A', errorId);
+    if (rowNum < 0) throw new Error('Could not find that error in the sheet — try Refresh, then try again.');
+    const values = [fd.get('Coaching_Status') || '', fd.get('Tech_Prevention_Plan') || '', fd.get('Lead_Coaching_Notes') || ''];
+    await sheetsUpdateRange(`Error_Log!O${rowNum}:Q${rowNum}`, values);
+    ev.target.reset();
+    await loadAll();
+    msg.textContent = 'Coaching session saved.'; msg.className = 'form-msg success';
+  } catch (err){
+    msg.textContent = err.message; msg.className = 'form-msg error';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('form-logattendance').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('logattendance-msg');
+  const btn = ev.target.querySelector('button[type=submit]');
+  const fd = new FormData(ev.target);
+  btn.disabled = true; msg.textContent = 'Saving…'; msg.className = 'form-msg';
+  try {
+    const row = [
+      genId(), nowTimestamp(), currentUser.name || currentUser.email,
+      fd.get('Work_Date'), fd.get('Technician_Name'), fd.get('Hours_Missed') || '',
+      fd.get('Absence_Type'), fd.get('Pre_Planned_Exclusion') ? 'TRUE' : 'FALSE',
+      fd.get('Notes') || ''
+    ];
+    await sheetsAppend('Attendance_Log', row);
+    ev.target.reset();
+    await loadAll();
+    msg.textContent = 'Attendance logged successfully.'; msg.className = 'form-msg success';
+  } catch (err){
+    msg.textContent = err.message; msg.className = 'form-msg error';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('form-addasset').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('addasset-msg');
+  const btn = ev.target.querySelector('button[type=submit]');
+  const fd = new FormData(ev.target);
+  btn.disabled = true; msg.textContent = 'Saving…'; msg.className = 'form-msg';
+  try {
+    const row = [
+      genId(), fd.get('Model') || '', fd.get('Type'), fd.get('Current_Station_ID'),
+      fd.get('Purchase_Price') || '', fd.get('Purchase_Date') || '', fd.get('In_Service_Date') || '',
+      '', fd.get('Expected_Lifecycle_Months') || '24', 'Operational'
+    ];
+    await sheetsAppend('Equipment', row);
+    ev.target.reset();
+    await loadAll();
+    msg.textContent = 'Asset added successfully.'; msg.className = 'form-msg success';
+  } catch (err){
+    msg.textContent = err.message; msg.className = 'form-msg error';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('form-logequipissue').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('logequipissue-msg');
+  const btn = ev.target.querySelector('button[type=submit]');
+  const fd = new FormData(ev.target);
+  btn.disabled = true; msg.textContent = 'Saving…'; msg.className = 'form-msg';
+  try {
+    const row = [
+      genId(), fd.get('Asset_ID'), fd.get('Log_Date'), fd.get('Type'),
+      currentUser.name || currentUser.email, fd.get('Notes') || '', fd.get('Cost') || ''
+    ];
+    await sheetsAppend('Maintenance_Log', row);
+    ev.target.reset();
+    await loadAll();
+    msg.textContent = 'Issue logged successfully.'; msg.className = 'form-msg success';
+  } catch (err){
+    msg.textContent = err.message; msg.className = 'form-msg error';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- Asset profile modal (history + decommission) ----------
+function openAssetProfile(assetId){
+  const asset = (DATA.Equipment || []).find(a => a.Asset_ID === assetId);
+  const stationMap = {};
+  (DATA.Stations || []).forEach(s => stationMap[s.Station_ID] = s);
+  const history = (DATA.Maintenance_Log || []).filter(m => m.Asset_ID === assetId).reverse();
+
+  document.getElementById('asset-name').textContent = asset ? `${asset.Model || asset.Type} — ${assetId}` : assetId;
+  const body = document.getElementById('asset-body');
+  if (!asset){
+    body.innerHTML = `<div class="empty">Couldn't find this asset — try Refresh.</div>`;
+    document.getElementById('asset-modal').style.display = 'flex';
+    return;
+  }
+  const st = stationMap[asset.Current_Station_ID];
+  const isDecommissioned = (asset.Status || '').toLowerCase() === 'decommissioned';
+
+  body.innerHTML = `
+    <div class="card">
+      <h2>Details</h2>
+      <div class="kpi-row">
+        <div class="kpi"><div class="label">Type</div><div class="value" style="font-size:16px;">${esc(asset.Type)}</div></div>
+        <div class="kpi"><div class="label">Station</div><div class="value" style="font-size:16px;">${esc(st ? st.Station_Name : asset.Current_Station_ID)}</div></div>
+        <div class="kpi"><div class="label">Status</div><div class="value" style="font-size:16px;"><span class="badge ${isDecommissioned ? 'red' : 'green'}">${esc(asset.Status)}</span></div></div>
+        <div class="kpi"><div class="label">Purchase Date</div><div class="value" style="font-size:16px;">${esc(asset.Purchase_Date) || '—'}</div></div>
+      </div>
+      <div class="form-actions">
+        <button class="btn-primary" id="decommission-btn" ${isDecommissioned ? 'disabled' : ''} style="${isDecommissioned ? '' : 'background:var(--red);'}">
+          ${isDecommissioned ? 'Already decommissioned' : 'Mark as decommissioned / failed'}
+        </button>
+        <span class="form-msg" id="decommission-msg"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Maintenance history (${history.length})</h2>
+      <div style="overflow-x:auto"><table id="asset-maint-table"></table></div>
+    </div>`;
+
+  buildTable(document.getElementById('asset-maint-table'),
+    [{label:'Date'},{label:'Type'},{label:'Lead'},{label:'Notes'},{label:'Cost'}],
+    history,
+    m => `<tr><td>${esc(m.Log_Date)}</td><td>${esc(m.Type)}</td><td>${techLink(m.Technician_Lead)}</td><td>${esc(m.Notes)}</td><td>${m.Cost ? '$'+esc(m.Cost) : '—'}</td></tr>`);
+
+  if (!isDecommissioned){
+    document.getElementById('decommission-btn').addEventListener('click', async () => {
+      if (!currentUser){ alert('Sign in first to make changes.'); return; }
+      if (!confirm(`Mark ${assetId} (${asset.Model || asset.Type}) as decommissioned? This updates the live Equipment sheet.`)) return;
+      const dmsg = document.getElementById('decommission-msg');
+      const dbtn = document.getElementById('decommission-btn');
+      dbtn.disabled = true; dmsg.textContent = 'Saving…'; dmsg.className = 'form-msg';
+      try {
+        const rowNum = await sheetsFindRow('Equipment', 'A', assetId);
+        if (rowNum < 0) throw new Error('Could not find this asset in the sheet — try Refresh.');
+        const today = new Date();
+        const todayStr = `${today.getMonth()+1}/${today.getDate()}/${today.getFullYear()}`;
+        await sheetsUpdateRange(`Equipment!H${rowNum}:J${rowNum}`, [todayStr, asset.Expected_Lifecycle_Months || '', 'Decommissioned']);
+        dmsg.textContent = 'Decommissioned. Refreshing…'; dmsg.className = 'form-msg success';
+        await loadAll();
+        openAssetProfile(assetId);
+      } catch (err){
+        dmsg.textContent = err.message; dmsg.className = 'form-msg error';
+        dbtn.disabled = false;
+      }
+    });
+  }
+
+  document.getElementById('asset-modal').style.display = 'flex';
+}
+
+function closeAssetProfile(){ document.getElementById('asset-modal').style.display = 'none'; }
+
+document.getElementById('asset-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'asset-modal' || e.target.id === 'asset-close') closeAssetProfile();
+});
+
+loadAll();
+</script>
+</body>
+</html>
