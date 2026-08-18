@@ -136,6 +136,7 @@
   <button data-view="logattendance">+ Log Attendance</button>
   <button data-view="addasset">+ Add Asset</button>
   <button data-view="logequipissue">+ Log Equip. Issue</button>
+  <button data-view="logmaintenance">+ Maintenance Log</button>
 </nav>
 
 <main>
@@ -344,7 +345,23 @@
       <form id="form-addasset">
         <div class="form-grid">
           <div class="field"><label>Model</label><input type="text" name="Model" placeholder="e.g. Slide Snap PRO"></div>
-          <div class="field"><label>Type <span class="req">*</span></label><input type="text" name="Type" required placeholder="e.g. Scanner"></div>
+          <div class="field"><label>Type <span class="req">*</span></label>
+            <select name="Type" required>
+              <option value="">Select…</option>
+              <option>Computer</option>
+              <option>Monitor</option>
+              <option>Peripherals</option>
+              <option>Scanner</option>
+              <option>Masks</option>
+              <option>Camera</option>
+              <option>Lens</option>
+              <option>Air Blower</option>
+              <option>Barcode Scanner</option>
+              <option>Player</option>
+              <option>Canopus Box</option>
+              <option>Other</option>
+            </select>
+          </div>
           <div class="field"><label>Station <span class="req">*</span></label><select name="Current_Station_ID" required><option value="">Select…</option></select></div>
           <div class="field"><label>Purchase Price</label><input type="number" name="Purchase_Price" min="0" step="0.01" placeholder="0.00"></div>
           <div class="field"><label>Purchase Date</label><input type="date" name="Purchase_Date"></div>
@@ -367,26 +384,60 @@
     </div>
     <div id="logequipissue-form-wrap" class="card" style="display:none;">
       <h2>Log Equipment Issue</h2>
-      <div class="desc">Adds a row to Maintenance_Log for the selected asset</div>
+      <div class="desc">Quick report that something's malfunctioning. Adds a row to Maintenance_Log as "Issue Reported" — no cost, that's filled in later on the Maintenance Log when it's actually repaired.</div>
       <form id="form-logequipissue">
         <div class="form-grid">
-          <div class="field"><label>Asset <span class="req">*</span></label><select name="Asset_ID" required><option value="">Select…</option></select></div>
-          <div class="field"><label>Log Date <span class="req">*</span></label><input type="date" name="Log_Date" required></div>
-          <div class="field"><label>Type <span class="req">*</span></label>
-            <select name="Type" required>
-              <option value="">Select…</option>
-              <option>Issue Reported</option>
-              <option>Repair</option>
-              <option>Preventive Maintenance</option>
-              <option>Inspection</option>
-            </select>
-          </div>
-          <div class="field"><label>Cost</label><input type="number" name="Cost" min="0" step="0.01" placeholder="0.00"></div>
-          <div class="field full"><label>Notes</label><textarea name="Notes" placeholder="What's wrong, what was done…"></textarea></div>
+          <div class="field"><label>Station <span class="req">*</span></label><select name="Station_ID" required><option value="">Select…</option></select></div>
+          <div class="field"><label>Asset <span class="req">*</span></label><select name="Asset_ID" required disabled><option value="">Select a station first…</option></select></div>
+          <div class="field"><label>Date <span class="req">*</span></label><input type="date" name="Log_Date" required></div>
+          <div class="field full"><label>What's wrong</label><textarea name="Notes" placeholder="What's wrong, how it was noticed…"></textarea></div>
         </div>
         <div class="form-actions">
           <button type="submit" class="btn-primary">Log Issue</button>
           <span class="form-msg" id="logequipissue-msg"></span>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- MAINTENANCE LOG -->
+  <section id="view-logmaintenance" class="view">
+    <div id="logmaintenance-locked" class="locked-notice" style="display:none;">
+      <b>Sign in required</b>
+      Sign in with your @memoryventures.com Google account (top right) to log maintenance.
+    </div>
+    <div id="logmaintenance-form-wrap" class="card" style="display:none;">
+      <h2>Maintenance Log</h2>
+      <div class="desc">Adds a row to Maintenance_Log for cleaning, repairs, or inspections — and can update the asset's status</div>
+      <form id="form-logmaintenance">
+        <div class="form-grid">
+          <div class="field"><label>Station <span class="req">*</span></label><select name="Station_ID" required><option value="">Select…</option></select></div>
+          <div class="field"><label>Asset <span class="req">*</span></label><select name="Asset_ID" required disabled><option value="">Select a station first…</option></select></div>
+          <div class="field"><label>Date <span class="req">*</span></label><input type="date" name="Log_Date" required></div>
+          <div class="field"><label>Type <span class="req">*</span></label>
+            <select name="Type" required>
+              <option value="">Select…</option>
+              <option>Cleaning</option>
+              <option>Repair</option>
+              <option>Preventive Maintenance</option>
+              <option>Inspection</option>
+              <option>Other</option>
+            </select>
+          </div>
+          <div class="field"><label>Cost</label><input type="number" name="Cost" min="0" step="0.01" placeholder="0.00"></div>
+          <div class="field"><label>Update Status</label>
+            <select name="Status_Update">
+              <option value="">No change</option>
+              <option value="Operational">Back in service (Operational)</option>
+              <option value="Backup">Move to Backup status</option>
+              <option value="Decommissioned">Decommissioned</option>
+            </select>
+          </div>
+          <div class="field full"><label>Notes</label><textarea name="Notes" placeholder="What was done…"></textarea></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Log Maintenance</button>
+          <span class="form-msg" id="logmaintenance-msg"></span>
         </div>
       </form>
     </div>
@@ -509,6 +560,15 @@ function statusBadge(status){
   if (s.includes('confirmed')) return `<span class="badge grey">${esc(status)}</span>`;
   if (!status) return `<span class="badge grey">—</span>`;
   return `<span class="badge grey">${esc(status)}</span>`;
+}
+
+// Equipment status color: Operational = green, Backup = amber, Decommissioned = red.
+function statusBadgeClass(status){
+  const s = (status || '').toLowerCase();
+  if (s === 'operational') return 'green';
+  if (s === 'backup') return 'amber';
+  if (s === 'decommissioned') return 'red';
+  return 'grey';
 }
 
 function classificationBadge(c){
@@ -1067,7 +1127,7 @@ function renderEquipment(){
     equip,
     e => {
       const st = stationMap[e.Current_Station_ID];
-      const statusCls = (e.Status||'').toLowerCase() === 'operational' ? 'green' : 'red';
+      const statusCls = statusBadgeClass(e.Status);
       return `<tr>
         <td>${assetLink(e.Asset_ID)}</td>
         <td>${esc(e.Model) || '—'}</td>
@@ -1221,7 +1281,7 @@ function signOut(){
 }
 
 function lockForms(locked){
-  ['logerror','logcoaching','logattendance','addasset','logequipissue'].forEach(name => {
+  ['logerror','logcoaching','logattendance','addasset','logequipissue','logmaintenance'].forEach(name => {
     const lockedEl = document.getElementById(`${name}-locked`);
     const formEl = document.getElementById(`${name}-form-wrap`);
     if (lockedEl) lockedEl.style.display = locked ? 'block' : 'none';
@@ -1338,6 +1398,41 @@ function nowTimestamp(){
 }
 
 // ---------- Populate form dropdowns from live data ----------
+// Shared Station -> Asset cascade used by the Log Equipment Issue and
+// Maintenance Log forms, so the asset list only shows what's actually at
+// the selected station instead of every asset in the building.
+function populateStationAssetOptions(formId, excludeDecommissioned){
+  const form = document.getElementById(formId);
+  if (!form || !DATA.Stations) return;
+  const stationSel = form.querySelector('select[name="Station_ID"]');
+  const assetSel = form.querySelector('select[name="Asset_ID"]');
+  if (!stationSel || !assetSel) return;
+
+  const curStation = stationSel.value;
+  stationSel.innerHTML = '<option value="">Select…</option>' +
+    DATA.Stations.map(s => `<option value="${esc(s.Station_ID)}">${esc(s.Department)} — ${esc(s.Station_Name)} (${esc(s.Station_ID)})</option>`).join('');
+  stationSel.value = curStation;
+
+  function refreshAssets(){
+    const stId = stationSel.value;
+    const curAsset = assetSel.value;
+    if (!stId){
+      assetSel.innerHTML = '<option value="">Select a station first…</option>';
+      assetSel.disabled = true;
+      return;
+    }
+    let assets = (DATA.Equipment || []).filter(a => a.Current_Station_ID === stId);
+    if (excludeDecommissioned) assets = assets.filter(a => (a.Status || '').toLowerCase() !== 'decommissioned');
+    assetSel.disabled = false;
+    assetSel.innerHTML = assets.length
+      ? '<option value="">Select…</option>' + assets.map(a => `<option value="${esc(a.Asset_ID)}">${esc(a.Model || a.Type)} — ${esc(a.Asset_ID)} (${esc(a.Status)})</option>`).join('')
+      : '<option value="">No equipment at this station</option>';
+    assetSel.value = curAsset;
+  }
+  stationSel.onchange = refreshAssets;
+  refreshAssets();
+}
+
 function populateFormDropdowns(){
   const techSel = document.querySelector('#form-logerror select[name="Technician_Name"]');
   if (techSel && DATA.Technicians){
@@ -1365,13 +1460,17 @@ function populateFormDropdowns(){
     const t = new Date();
     equipDateInput.value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
   }
-  const assetSel = document.querySelector('#form-logequipissue select[name="Asset_ID"]');
-  if (assetSel && DATA.Equipment){
-    const cur = assetSel.value;
-    assetSel.innerHTML = '<option value="">Select…</option>' +
-      DATA.Equipment.map(a => `<option value="${esc(a.Asset_ID)}">${esc(a.Model || a.Type)} — ${esc(a.Asset_ID)} (${esc(a.Status)})</option>`).join('');
-    assetSel.value = cur;
+  const maintDateInput = document.querySelector('#form-logmaintenance input[name="Log_Date"]');
+  if (maintDateInput && !maintDateInput.value){
+    const t = new Date();
+    maintDateInput.value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
   }
+  // Issue reports only show operational/backup equipment (no point reporting
+  // an issue on something already decommissioned). Maintenance log shows
+  // everything at the station, since maintenance can restore a decommissioned
+  // or backup unit.
+  populateStationAssetOptions('form-logequipissue', true);
+  populateStationAssetOptions('form-logmaintenance', false);
   const errSel = document.querySelector('#form-logcoaching select[name="Error_ID"]');
   if (errSel && DATA.Error_Log){
     const cur = errSel.value;
@@ -1493,13 +1592,48 @@ document.getElementById('form-logequipissue').addEventListener('submit', async (
   btn.disabled = true; msg.textContent = 'Saving…'; msg.className = 'form-msg';
   try {
     const row = [
-      genId(), fd.get('Asset_ID'), fd.get('Log_Date'), fd.get('Type'),
-      currentUser.name || currentUser.email, fd.get('Notes') || '', fd.get('Cost') || ''
+      genId(), fd.get('Asset_ID'), fd.get('Log_Date'), 'Issue Reported',
+      currentUser.name || currentUser.email, fd.get('Notes') || '', ''
     ];
     await sheetsAppend('Maintenance_Log', row);
     ev.target.reset();
     await loadAll();
     msg.textContent = 'Issue logged successfully.'; msg.className = 'form-msg success';
+  } catch (err){
+    msg.textContent = err.message; msg.className = 'form-msg error';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('form-logmaintenance').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('logmaintenance-msg');
+  const btn = ev.target.querySelector('button[type=submit]');
+  const fd = new FormData(ev.target);
+  const assetId = fd.get('Asset_ID');
+  const statusUpdate = fd.get('Status_Update') || '';
+  btn.disabled = true; msg.textContent = 'Saving…'; msg.className = 'form-msg';
+  try {
+    const row = [
+      genId(), assetId, fd.get('Log_Date'), fd.get('Type'),
+      currentUser.name || currentUser.email, fd.get('Notes') || '', fd.get('Cost') || ''
+    ];
+    await sheetsAppend('Maintenance_Log', row);
+
+    if (statusUpdate){
+      const asset = (DATA.Equipment || []).find(a => a.Asset_ID === assetId);
+      const rowNum = await sheetsFindRow('Equipment', 'A', assetId);
+      if (rowNum < 0) throw new Error('Maintenance was logged, but could not find this asset in the Equipment sheet to update its status — try Refresh.');
+      const today = new Date();
+      const todayStr = `${today.getMonth()+1}/${today.getDate()}/${today.getFullYear()}`;
+      const decomDate = statusUpdate === 'Decommissioned' ? todayStr : '';
+      await sheetsUpdateRange(`Equipment!H${rowNum}:J${rowNum}`, [decomDate, (asset && asset.Expected_Lifecycle_Months) || '', statusUpdate]);
+    }
+
+    ev.target.reset();
+    await loadAll();
+    msg.textContent = 'Maintenance logged successfully.'; msg.className = 'form-msg success';
   } catch (err){
     msg.textContent = err.message; msg.className = 'form-msg error';
   } finally {
@@ -1522,7 +1656,13 @@ function openAssetProfile(assetId){
     return;
   }
   const st = stationMap[asset.Current_Station_ID];
-  const isDecommissioned = (asset.Status || '').toLowerCase() === 'decommissioned';
+  const curStatus = (asset.Status || '').toLowerCase();
+
+  const statusButtons = [
+    { status: 'Operational', label: 'Back in service' },
+    { status: 'Backup', label: 'Move to backup' },
+    { status: 'Decommissioned', label: 'Decommission / failed' }
+  ];
 
   body.innerHTML = `
     <div class="card">
@@ -1530,15 +1670,17 @@ function openAssetProfile(assetId){
       <div class="kpi-row">
         <div class="kpi"><div class="label">Type</div><div class="value" style="font-size:16px;">${esc(asset.Type)}</div></div>
         <div class="kpi"><div class="label">Station</div><div class="value" style="font-size:16px;">${esc(st ? st.Station_Name : asset.Current_Station_ID)}</div></div>
-        <div class="kpi"><div class="label">Status</div><div class="value" style="font-size:16px;"><span class="badge ${isDecommissioned ? 'red' : 'green'}">${esc(asset.Status)}</span></div></div>
+        <div class="kpi"><div class="label">Status</div><div class="value" style="font-size:16px;"><span class="badge ${statusBadgeClass(asset.Status)}">${esc(asset.Status)}</span></div></div>
         <div class="kpi"><div class="label">Purchase Date</div><div class="value" style="font-size:16px;">${esc(asset.Purchase_Date) || '—'}</div></div>
       </div>
-      <div class="form-actions">
-        <button class="btn-primary" id="decommission-btn" ${isDecommissioned ? 'disabled' : ''} style="${isDecommissioned ? '' : 'background:var(--red);'}">
-          ${isDecommissioned ? 'Already decommissioned' : 'Mark as decommissioned / failed'}
-        </button>
-        <span class="form-msg" id="decommission-msg"></span>
+      <div class="form-actions" style="flex-wrap:wrap;">
+        ${statusButtons.map(b => `
+          <button class="btn-primary" data-status-btn="${b.status}" ${curStatus === b.status.toLowerCase() ? 'disabled' : ''}
+            style="${curStatus === b.status.toLowerCase() ? '' : (b.status === 'Decommissioned' ? 'background:var(--red);' : '')}">
+            ${curStatus === b.status.toLowerCase() ? `Currently ${b.status}` : b.label}
+          </button>`).join('')}
       </div>
+      <div class="form-msg" id="status-msg" style="margin-top:8px;"></div>
     </div>
     <div class="card">
       <h2>Maintenance history (${history.length})</h2>
@@ -1550,28 +1692,30 @@ function openAssetProfile(assetId){
     history,
     m => `<tr><td>${esc(m.Log_Date)}</td><td>${esc(m.Type)}</td><td>${techLink(m.Technician_Lead)}</td><td>${esc(m.Notes)}</td><td>${m.Cost ? '$'+esc(m.Cost) : '—'}</td></tr>`);
 
-  if (!isDecommissioned){
-    document.getElementById('decommission-btn').addEventListener('click', async () => {
+  body.querySelectorAll('button[data-status-btn]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const newStatus = btn.dataset.statusBtn;
       if (!currentUser){ alert('Sign in first to make changes.'); return; }
-      if (!confirm(`Mark ${assetId} (${asset.Model || asset.Type}) as decommissioned? This updates the live Equipment sheet.`)) return;
-      const dmsg = document.getElementById('decommission-msg');
-      const dbtn = document.getElementById('decommission-btn');
-      dbtn.disabled = true; dmsg.textContent = 'Saving…'; dmsg.className = 'form-msg';
+      if (!confirm(`Mark ${assetId} (${asset.Model || asset.Type}) as ${newStatus}? This updates the live Equipment sheet.`)) return;
+      const smsg = document.getElementById('status-msg');
+      body.querySelectorAll('button[data-status-btn]').forEach(b => b.disabled = true);
+      smsg.textContent = 'Saving…'; smsg.className = 'form-msg';
       try {
         const rowNum = await sheetsFindRow('Equipment', 'A', assetId);
         if (rowNum < 0) throw new Error('Could not find this asset in the sheet — try Refresh.');
         const today = new Date();
         const todayStr = `${today.getMonth()+1}/${today.getDate()}/${today.getFullYear()}`;
-        await sheetsUpdateRange(`Equipment!H${rowNum}:J${rowNum}`, [todayStr, asset.Expected_Lifecycle_Months || '', 'Decommissioned']);
-        dmsg.textContent = 'Decommissioned. Refreshing…'; dmsg.className = 'form-msg success';
+        const decomDate = newStatus === 'Decommissioned' ? todayStr : '';
+        await sheetsUpdateRange(`Equipment!H${rowNum}:J${rowNum}`, [decomDate, asset.Expected_Lifecycle_Months || '', newStatus]);
+        smsg.textContent = 'Updated. Refreshing…'; smsg.className = 'form-msg success';
         await loadAll();
         openAssetProfile(assetId);
       } catch (err){
-        dmsg.textContent = err.message; dmsg.className = 'form-msg error';
-        dbtn.disabled = false;
+        smsg.textContent = err.message; smsg.className = 'form-msg error';
+        body.querySelectorAll('button[data-status-btn]').forEach(b => b.disabled = false);
       }
     });
-  }
+  });
 
   document.getElementById('asset-modal').style.display = 'flex';
 }
