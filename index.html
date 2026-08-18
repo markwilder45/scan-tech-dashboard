@@ -500,7 +500,12 @@ let __jsonpCounter = 0;
 
 function jsonpUrl(tab, cbName){
   const tqx = `out:json;responseHandler:${cbName}`;
-  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=${encodeURIComponent(tqx)}&sheet=${encodeURIComponent(tab)}&cb=${Date.now()}`;
+  // headers=1 tells Google's endpoint to treat the first row as column
+  // headers. Without it, Google tries to auto-detect the header row and
+  // sometimes gets it wrong (e.g. on the Stations tab, where every column
+  // is plain text) — the real headers end up read in as a data row instead,
+  // leaving every field blank.
+  return `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=${encodeURIComponent(tqx)}&sheet=${encodeURIComponent(tab)}&headers=1&cb=${Date.now()}`;
 }
 
 function gvizToObjects(table){
