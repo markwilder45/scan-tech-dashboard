@@ -276,28 +276,37 @@
       <b>Sign in required</b>
       Sign in with your @memoryventures.com Google account (top right) to log a coaching session.
     </div>
-    <div id="logcoaching-form-wrap" class="card" style="display:none;">
-      <h2>Log Coaching Session</h2>
-      <div class="desc">Updates an existing Error_Log row's Coaching Status, Prevention Plan, and Lead Notes</div>
-      <form id="form-logcoaching">
-        <div class="form-grid">
-          <div class="field full"><label>Error <span class="req">*</span></label><select name="Error_ID" required><option value="">Select an error…</option></select></div>
-          <div class="field"><label>Coaching Status <span class="req">*</span></label>
-            <select name="Coaching_Status" required>
-              <option value="">Select…</option>
-              <option>Pending Discussion</option>
-              <option>Discussed - Complete</option>
-              <option>No Action Needed</option>
-            </select>
-          </div>
-          <div class="field"><label>Tech Prevention Plan</label><textarea name="Tech_Prevention_Plan" placeholder="What the tech will do differently…"></textarea></div>
-          <div class="field full"><label>Lead Coaching Notes</label><textarea name="Lead_Coaching_Notes" placeholder="Notes from the coaching conversation…"></textarea></div>
+    <div id="logcoaching-form-wrap" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <h2>Log Coaching Session</h2>
+          <div class="desc">Updates an existing Error_Log row's Coaching Status, Prevention Plan, and Lead Notes</div>
+          <form id="form-logcoaching">
+            <div class="form-grid">
+              <div class="field full"><label>Error <span class="req">*</span></label><select name="Error_ID" required><option value="">Select an error…</option></select></div>
+              <div class="field"><label>Coaching Status <span class="req">*</span></label>
+                <select name="Coaching_Status" required>
+                  <option value="">Select…</option>
+                  <option>Pending Discussion</option>
+                  <option>Discussed - Complete</option>
+                  <option>No Action Needed</option>
+                </select>
+              </div>
+              <div class="field"><label>Tech Prevention Plan</label><textarea name="Tech_Prevention_Plan" placeholder="What the tech will do differently…"></textarea></div>
+              <div class="field full"><label>Lead Coaching Notes</label><textarea name="Lead_Coaching_Notes" placeholder="Notes from the coaching conversation…"></textarea></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Save Coaching Session</button>
+              <span class="form-msg" id="logcoaching-msg"></span>
+            </div>
+          </form>
         </div>
-        <div class="form-actions">
-          <button type="submit" class="btn-primary">Save Coaching Session</button>
-          <span class="form-msg" id="logcoaching-msg"></span>
+        <div class="card">
+          <h2>Error details</h2>
+          <div class="desc">Pull up the incident here so it's visible while you walk through it with the tech</div>
+          <div id="logcoaching-error-detail"><div class="empty">No error selected yet.</div></div>
         </div>
-      </form>
+      </div>
     </div>
   </section>
 
@@ -821,21 +830,14 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape'){ closeProfile(); closeAssetProfile(); closeErrorDetail(); closeCategoryDetail(); }
 });
 
-// ---------- Error detail modal ----------
-function openErrorDetail(errorId){
-  const e = (DATA.Error_Log || []).find(r => r.Error_ID === errorId);
-  document.getElementById('error-title').textContent = errorId;
-  const body = document.getElementById('error-body');
-  if (!e){
-    body.innerHTML = `<div class="empty">Couldn't find this error — try Refresh.</div>`;
-    document.getElementById('error-modal').style.display = 'flex';
-    return;
-  }
+// ---------- Error detail (shared markup used by the modal and the Log
+// Coaching side panel) ----------
+function errorDetailHtml(e){
   const photo = e.Sample_Image && /^https?:\/\//i.test(e.Sample_Image)
     ? `<a href="${esc(e.Sample_Image)}" target="_blank" rel="noopener"><img src="${esc(e.Sample_Image)}" alt="photo" style="max-width:100%;max-height:320px;border-radius:8px;border:1px solid var(--border);"></a>`
     : (e.Sample_Image ? `<span class="badge grey">${esc(e.Sample_Image.split('/').pop())}</span> (legacy file — not viewable here)` : '<span class="empty">No photo attached.</span>');
 
-  body.innerHTML = `
+  return `
     <div class="detail-grid">
       <div><div class="k">Incident Date</div><div class="v">${esc(e.Incident_Date)}</div></div>
       <div><div class="k">Logged</div><div class="v">${esc(e.Timestamp)} by ${esc(e.Logged_By)}</div></div>
@@ -853,10 +855,35 @@ function openErrorDetail(errorId){
       <div class="full"><div class="k">Tech Prevention Plan</div><div class="v">${esc(e.Tech_Prevention_Plan) || '—'}</div></div>
       <div class="full"><div class="k">Lead Coaching Notes</div><div class="v">${esc(e.Lead_Coaching_Notes) || '—'}</div></div>
     </div>`;
+}
+
+function openErrorDetail(errorId){
+  const e = (DATA.Error_Log || []).find(r => r.Error_ID === errorId);
+  document.getElementById('error-title').textContent = errorId;
+  const body = document.getElementById('error-body');
+  if (!e){
+    body.innerHTML = `<div class="empty">Couldn't find this error — try Refresh.</div>`;
+    document.getElementById('error-modal').style.display = 'flex';
+    return;
+  }
+  body.innerHTML = errorDetailHtml(e);
   document.getElementById('error-modal').style.display = 'flex';
 }
 
 function closeErrorDetail(){ document.getElementById('error-modal').style.display = 'none'; }
+
+// Shows the selected error right next to the Log Coaching form, so a lead
+// can pull it up and walk through it with the tech while filling out the form.
+function renderLogCoachingErrorDetail(errorId){
+  const panel = document.getElementById('logcoaching-error-detail');
+  if (!panel) return;
+  if (!errorId){
+    panel.innerHTML = `<div class="empty">No error selected yet.</div>`;
+    return;
+  }
+  const e = (DATA.Error_Log || []).find(r => r.Error_ID === errorId);
+  panel.innerHTML = e ? errorDetailHtml(e) : `<div class="empty">Couldn't find this error — try Refresh.</div>`;
+}
 
 // ---------- Category detail modal ----------
 function categoryTechBreakdown(category){
@@ -1483,6 +1510,8 @@ function populateFormDropdowns(){
     errSel.innerHTML = '<option value="">Select an error…</option>' +
       rows.map(e => `<option value="${esc(e.Error_ID)}">${esc(e.Error_ID)} — ${esc(e.Technician_Name)} — ${esc(e.Standard_Category || e.Error_Classification)} (${esc(e.Incident_Date)})</option>`).join('');
     errSel.value = cur;
+    errSel.onchange = () => renderLogCoachingErrorDetail(errSel.value);
+    renderLogCoachingErrorDetail(errSel.value);
   }
 }
 
