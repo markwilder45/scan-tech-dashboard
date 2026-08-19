@@ -82,13 +82,18 @@
   .dept-station-group:last-child{margin-bottom:0;}
   .dept-station-group h3{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:10px;margin:0 0 10px;}
   .station-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;}
-  .station-chip{border:1px solid var(--border);border-radius:10px;padding:11px 13px;background:#fafbfc;font-size:12.5px;}
+  .station-chip{border:1px solid var(--border);border-radius:10px;padding:11px 13px;background:#fafbfc;font-size:12.5px;cursor:pointer;transition:box-shadow .12s ease,border-color .12s ease;}
   .station-chip.status-red{border-color:#f3b9bd;background:#fef6f6;}
   .station-chip.status-amber{border-color:#f2d59a;background:#fffaf0;}
+  .station-chip:hover{box-shadow:0 0 0 2px rgba(47,111,235,.22);}
+  .station-chip.selected{border-color:var(--accent);box-shadow:0 0 0 2px rgba(47,111,235,.4);}
   .station-chip-top{display:flex;align-items:center;gap:7px;font-weight:600;margin-bottom:5px;}
   .station-chip-detail{color:var(--muted);line-height:1.6;}
   .station-chip-detail .issue-red{color:var(--red);}
   .station-chip-detail .issue-amber{color:var(--amber);}
+  .station-detail-card{position:sticky;top:16px;}
+  .station-detail-card h3{font-size:13px;font-weight:700;margin:0 0 8px;}
+  .station-detail-card h3.spaced{margin-top:20px;}
   footer{text-align:center;color:var(--muted);font-size:12px;padding:20px;}
 
   /* --- Auth + forms --- */
@@ -249,14 +254,22 @@
       <div class="desc">At-a-glance status by department — from each asset's Status field and its most recent Maintenance Log entry</div>
       <div class="health-dept-row" id="dept-health-cards"></div>
     </div>
-    <div class="card">
-      <h2>Stations by Department</h2>
-      <div class="desc">
-        <span class="status-dot green"></span>Operational
-        &nbsp; <span class="status-dot amber"></span>Needs maintenance / running on backup
-        &nbsp; <span class="status-dot red"></span>Decommissioned — needs replacement
+    <div class="two-col">
+      <div class="card">
+        <h2>Stations by Department</h2>
+        <div class="desc">
+          <span class="status-dot green"></span>Operational
+          &nbsp; <span class="status-dot amber"></span>Needs maintenance / running on backup
+          &nbsp; <span class="status-dot red"></span>Decommissioned — needs replacement
+          <br>Click a station to see its full equipment details.
+        </div>
+        <div id="station-health-groups"></div>
       </div>
-      <div id="station-health-groups"></div>
+      <div class="card station-detail-card">
+        <h2 id="station-detail-title">Station details</h2>
+        <div class="desc" id="station-detail-sub">Click a station on the left to see its equipment and logs here.</div>
+        <div id="station-detail-body"><div class="empty">No station selected yet.</div></div>
+      </div>
     </div>
     <div class="card">
       <h2>Equipment (full list)</h2>
@@ -1283,6 +1296,78 @@ function statusLabel(status){
   return { green: 'All systems operational', amber: 'Needs attention', red: 'Action needed', grey: 'No equipment logged' }[status] || 'Unknown';
 }
 
+// Which station's card is currently pinned open in the detail panel.
+let selectedStationId = null;
+
+function renderStationDetail(stationId){
+  selectedStationId = stationId || null;
+  const titleEl = document.getElementById('station-detail-title');
+  const subEl = document.getElementById('station-detail-sub');
+  const body = document.getElementById('station-detail-body');
+  if (!stationId){
+    titleEl.textContent = 'Station details';
+    subEl.textContent = 'Click a station on the left to see its equipment and logs here.';
+    body.innerHTML = '<div class="empty">No station selected yet.</div>';
+    return;
+  }
+
+  const stationMap = {};
+  (DATA.Stations || []).forEach(s => stationMap[s.Station_ID] = s);
+  const station = stationMap[stationId] || { Station_ID: stationId, Station_Name: stationId };
+  const latestMaint = latestMaintenanceByAsset();
+  const assets = (DATA.Equipment || []).filter(a => a.Current_Station_ID === stationId)
+    .map(a => ({ asset: a, status: assetHealthStatus(a, latestMaint) }));
+  const assetById = {};
+  assets.forEach(x => assetById[x.asset.Asset_ID] = x.asset);
+  const overallStatus = assets.length
+    ? (assets.some(x => x.status === 'red') ? 'red' : assets.some(x => x.status === 'amber') ? 'amber' : 'green')
+    : 'grey';
+
+  const logs = (DATA.Maintenance_Log || []).filter(m => assetById[m.Asset_ID])
+    .slice()
+    .sort((a,b) => {
+      const da = parseFlexDate(a.Log_Date), db = parseFlexDate(b.Log_Date);
+      return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+    });
+
+  titleEl.innerHTML = `<span class="status-dot ${overallStatus}"></span>${esc(station.Station_Name || station.Station_ID)}`;
+  subEl.textContent = `${station.Department ? station.Department + ' · ' : ''}${station.Station_ID}`;
+
+  const equipHtml = assets.length ? `
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Asset</th><th>Type</th><th>Status</th><th>Purchase Date</th></tr></thead>
+      <tbody>
+        ${assets.map(x => `<tr>
+          <td>${assetLink(x.asset.Asset_ID, x.asset.Model || x.asset.Type)}</td>
+          <td>${esc(x.asset.Type)}</td>
+          <td><span class="badge ${statusBadgeClass(x.asset.Status)}">${esc(x.asset.Status)}</span></td>
+          <td>${esc(x.asset.Purchase_Date) || '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>` : '<div class="empty">No equipment currently assigned to this station.</div>';
+
+  const logsHtml = logs.length ? `
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Date</th><th>Asset</th><th>Type</th><th>Lead</th><th>Notes</th><th>Cost</th></tr></thead>
+      <tbody>
+        ${logs.map(m => `<tr>
+          <td>${esc(m.Log_Date)}</td>
+          <td>${assetLink(m.Asset_ID, (assetById[m.Asset_ID] && (assetById[m.Asset_ID].Model || assetById[m.Asset_ID].Type)) || m.Asset_ID)}</td>
+          <td>${esc(m.Type)}</td>
+          <td>${techLink(m.Technician_Lead)}</td>
+          <td>${esc(m.Notes)}</td>
+          <td>${m.Cost ? '$' + esc(m.Cost) : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>` : '<div class="empty">No maintenance or issue history for this station\'s equipment.</div>';
+
+  body.innerHTML = `
+    <h3>Equipment at this station (${assets.length})</h3>
+    ${equipHtml}
+    <h3 class="spaced">Maintenance &amp; issue history (${logs.length})</h3>
+    ${logsHtml}`;
+}
+
 function stationChipDetail(se){
   if (!se.assets.length) return `<div class="station-chip-detail">No equipment currently assigned.</div>`;
   const byStatus = { green: [], amber: [], red: [] };
@@ -1328,13 +1413,17 @@ function renderEquipmentHealth(){
       <h3><span class="status-dot ${d.status}"></span>${esc(name)}<span class="status-pill ${d.status}" style="margin-top:0;">${statusLabel(d.status)}</span></h3>
       <div class="station-grid">
         ${stationEntries.map(se => `
-          <div class="station-chip status-${se.status}">
+          <div class="station-chip status-${se.status}${se.station.Station_ID === selectedStationId ? ' selected' : ''}" data-station="${esc(se.station.Station_ID)}">
             <div class="station-chip-top"><span class="status-dot ${se.status}"></span>${esc(se.station.Station_Name || se.station.Station_ID)} <span style="color:var(--muted);font-weight:400;">(${esc(se.station.Station_ID)})</span></div>
             ${stationChipDetail(se)}
           </div>`).join('')}
       </div>
     </div>`;
   }).join('') : '<div class="empty">No station data yet.</div>';
+
+  // Keep the detail panel in sync with the latest data (and re-show the
+  // previously selected station, if any, after a refresh).
+  renderStationDetail(selectedStationId);
 }
 
 // ---------- EQUIPMENT ----------
@@ -1395,6 +1484,16 @@ document.getElementById('logactivity-subnav').addEventListener('click', e => {
   btn.classList.add('active');
   document.querySelectorAll('#view-logactivity .subview').forEach(v => v.classList.remove('active'));
   document.getElementById('sub-' + btn.dataset.sub).classList.add('active');
+});
+
+// Clicking a station card on the Equipment tab opens its full equipment +
+// maintenance/issue history in the panel to the right.
+document.getElementById('station-health-groups').addEventListener('click', e => {
+  const chip = e.target.closest('.station-chip[data-station]');
+  if (!chip) return;
+  document.querySelectorAll('#station-health-groups .station-chip.selected').forEach(c => c.classList.remove('selected'));
+  chip.classList.add('selected');
+  renderStationDetail(chip.dataset.station);
 });
 
 document.getElementById('refresh-link').addEventListener('click', () => {
