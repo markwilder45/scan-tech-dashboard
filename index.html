@@ -20,6 +20,12 @@
   nav button{background:transparent;border:none;color:#c7d2e6;padding:10px 16px;font-size:13.5px;font-weight:500;cursor:pointer;border-radius:8px 8px 0 0;}
   nav button.active{background:var(--bg);color:var(--text);}
   nav button:hover:not(.active){background:#1c2f57;color:#fff;}
+  .subnav{display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:16px;margin-bottom:20px;}
+  .subnav button{background:#eef0f3;border:none;color:var(--text);padding:8px 15px;font-size:12.5px;font-weight:600;cursor:pointer;border-radius:999px;}
+  .subnav button.active{background:var(--accent);color:#fff;}
+  .subnav button:hover:not(.active){background:#e2e5ea;}
+  .subview{display:none;}
+  .subview.active{display:block;}
   main{padding:24px 28px 60px;max-width:1300px;margin:0 auto;}
   .view{display:none;}
   .view.active{display:block;}
@@ -161,12 +167,7 @@
   <button data-view="attendance">Attendance</button>
   <button data-view="equipment">Equipment</button>
   <span style="width:1px;background:#2a3b63;margin:6px 4px;"></span>
-  <button data-view="logerror">+ Log Error</button>
-  <button data-view="logcoaching">+ Log Coaching</button>
-  <button data-view="logattendance">+ Log Attendance</button>
-  <button data-view="addasset">+ Add Asset</button>
-  <button data-view="logequipissue">+ Log Equip. Issue</button>
-  <button data-view="logmaintenance">+ Maintenance Log</button>
+  <button data-view="logactivity">+ Log / Add</button>
 </nav>
 
 <main>
@@ -268,8 +269,18 @@
     </div>
   </section>
 
-  <!-- LOG NEW ERROR -->
-  <section id="view-logerror" class="view">
+  <!-- LOG / ADD (consolidated) -->
+  <section id="view-logactivity" class="view">
+    <div class="subnav" id="logactivity-subnav">
+      <button data-sub="logerror" class="active">Log Error</button>
+      <button data-sub="logcoaching">Log Coaching</button>
+      <button data-sub="logattendance">Log Attendance</button>
+      <button data-sub="addasset">Add Asset</button>
+      <button data-sub="logequipissue">Log Equip. Issue</button>
+      <button data-sub="logmaintenance">Maintenance Log</button>
+    </div>
+
+    <div class="subview active" id="sub-logerror">
     <div id="logerror-locked" class="locked-notice" style="display:none;">
       <b>Sign in required</b>
       Sign in with your @memoryventures.com Google account (top right) to log a new error.
@@ -312,10 +323,9 @@
         </div>
       </form>
     </div>
-  </section>
+    </div>
 
-  <!-- LOG COACHING SESSION -->
-  <section id="view-logcoaching" class="view">
+    <div class="subview" id="sub-logcoaching">
     <div id="logcoaching-locked" class="locked-notice" style="display:none;">
       <b>Sign in required</b>
       Sign in with your @memoryventures.com Google account (top right) to log a coaching session.
@@ -352,10 +362,9 @@
         </div>
       </div>
     </div>
-  </section>
+    </div>
 
-  <!-- LOG ATTENDANCE -->
-  <section id="view-logattendance" class="view">
+    <div class="subview" id="sub-logattendance">
     <div id="logattendance-locked" class="locked-notice" style="display:none;">
       <b>Sign in required</b>
       Sign in with your @memoryventures.com Google account (top right) to log attendance.
@@ -384,10 +393,9 @@
         </div>
       </form>
     </div>
-  </section>
+    </div>
 
-  <!-- ADD ASSET -->
-  <section id="view-addasset" class="view">
+    <div class="subview" id="sub-addasset">
     <div id="addasset-locked" class="locked-notice" style="display:none;">
       <b>Sign in required</b>
       Sign in with your @memoryventures.com Google account (top right) to add equipment.
@@ -427,10 +435,9 @@
         </div>
       </form>
     </div>
-  </section>
+    </div>
 
-  <!-- LOG EQUIPMENT ISSUE -->
-  <section id="view-logequipissue" class="view">
+    <div class="subview" id="sub-logequipissue">
     <div id="logequipissue-locked" class="locked-notice" style="display:none;">
       <b>Sign in required</b>
       Sign in with your @memoryventures.com Google account (top right) to log an equipment issue.
@@ -451,10 +458,9 @@
         </div>
       </form>
     </div>
-  </section>
+    </div>
 
-  <!-- MAINTENANCE LOG -->
-  <section id="view-logmaintenance" class="view">
+    <div class="subview" id="sub-logmaintenance">
     <div id="logmaintenance-locked" class="locked-notice" style="display:none;">
       <b>Sign in required</b>
       Sign in with your @memoryventures.com Google account (top right) to log maintenance.
@@ -493,6 +499,7 @@
           <span class="form-msg" id="logmaintenance-msg"></span>
         </div>
       </form>
+    </div>
     </div>
   </section>
 </main>
@@ -1377,6 +1384,17 @@ document.getElementById('tabs').addEventListener('click', e => {
   btn.classList.add('active');
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + btn.dataset.view).classList.add('active');
+});
+
+// Sub-navigation inside the consolidated "+ Log / Add" tab (Log Error, Log
+// Coaching, Log Attendance, Add Asset, Log Equip. Issue, Maintenance Log).
+document.getElementById('logactivity-subnav').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-sub]');
+  if (!btn) return;
+  document.querySelectorAll('#logactivity-subnav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('#view-logactivity .subview').forEach(v => v.classList.remove('active'));
+  document.getElementById('sub-' + btn.dataset.sub).classList.add('active');
 });
 
 document.getElementById('refresh-link').addEventListener('click', () => {
