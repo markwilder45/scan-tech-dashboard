@@ -310,20 +310,15 @@
             <select name="Error_Classification" required>
               <option value="">Select…</option>
               <option>Clerical Error</option>
-              <option>Critical Violation</option>
               <option>Rescan / Order Error</option>
+              <option>Critical Violation</option>
+              <option>Disciplinary Warning</option>
               <option>Other</option>
             </select>
           </div>
           <div class="field"><label>Standard Category</label>
-            <select name="Standard_Category">
-              <option value="">Select…</option>
-              <option>Wrong Shelving Assignment</option>
-              <option>Skipped/Missing Media Scans</option>
-              <option>Failure to Move Data</option>
-              <option>Incorrect Counts Entered</option>
-              <option>Damage Due to Negligence</option>
-              <option>Other</option>
+            <select name="Standard_Category" disabled>
+              <option value="">Select a classification first…</option>
             </select>
           </div>
           <div class="field"><label>Affected Image Count</label><input type="number" name="Affected_Image_Count" min="0" step="1" value="0"></div>
@@ -651,7 +646,7 @@ function statusBadgeClass(status){
 
 function classificationBadge(c){
   const s = (c || '').toLowerCase();
-  if (s.includes('critical')) return `<span class="badge red">${esc(c)}</span>`;
+  if (s.includes('critical') || s.includes('disciplinary')) return `<span class="badge red">${esc(c)}</span>`;
   if (s.includes('rescan')) return `<span class="badge amber">${esc(c)}</span>`;
   if (!c) return '—';
   return `<span class="badge grey">${esc(c)}</span>`;
@@ -1733,6 +1728,34 @@ function nowTimestamp(){
 // Shared Station -> Asset cascade used by the Log Equipment Issue and
 // Maintenance Log forms, so the asset list only shows what's actually at
 // the selected station instead of every asset in the building.
+// Standard Category options depend on which Error Classification was picked
+// on the Log New Error form, mirroring the SWITCH/LIST logic from the old
+// AppSheet app formula.
+const STANDARD_CATEGORY_BY_CLASSIFICATION = {
+  'Clerical Error': ['Incorrect Counts Entered', 'Failure to Move Data', 'Wrong Shelving Assignment', 'Not Marking Special Media', 'Skipped/Missing Media Scans', 'Not Following Media Sequencing', 'Not Adding Customer Titling', 'Failure to Label Bundles', 'Removing Items Causing Weight Discrepancy', 'Not Marking In-Progress Media', 'Multiple Orders Open on Desk', 'Other'],
+  'Rescan / Order Error': ['Blurry', 'Lines', 'Dust', 'Overlap', 'Cut-Off', 'Double Exposure', 'Wrong Settings', 'Other'],
+  'Critical Violation': ['Loss of Customer Media', 'Media Cross-Contamination', 'Damage Due to Negligence', 'Other'],
+  'Disciplinary Warning': ['Verbal Warning Issued', 'Written Warning Issued'],
+};
+
+function updateStandardCategoryOptions(){
+  const classSel = document.querySelector('#form-logerror select[name="Error_Classification"]');
+  const catSel = document.querySelector('#form-logerror select[name="Standard_Category"]');
+  if (!classSel || !catSel) return;
+  const cur = catSel.value;
+  if (!classSel.value){
+    catSel.innerHTML = '<option value="">Select a classification first…</option>';
+    catSel.disabled = true;
+    classSel.onchange = updateStandardCategoryOptions;
+    return;
+  }
+  const options = STANDARD_CATEGORY_BY_CLASSIFICATION[classSel.value] || ['Other'];
+  catSel.disabled = false;
+  catSel.innerHTML = '<option value="">Select…</option>' + options.map(o => `<option>${esc(o)}</option>`).join('');
+  if (options.includes(cur)) catSel.value = cur;
+  classSel.onchange = updateStandardCategoryOptions;
+}
+
 function populateStationAssetOptions(formId, excludeDecommissioned){
   const form = document.getElementById(formId);
   if (!form || !DATA.Stations) return;
@@ -1766,6 +1789,7 @@ function populateStationAssetOptions(formId, excludeDecommissioned){
 }
 
 function populateFormDropdowns(){
+  updateStandardCategoryOptions();
   const techSel = document.querySelector('#form-logerror select[name="Technician_Name"]');
   if (techSel && DATA.Technicians){
     const cur = techSel.value;
