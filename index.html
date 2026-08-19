@@ -52,7 +52,37 @@
   .two-col{display:grid;grid-template-columns:1.3fr 1fr;gap:20px;}
   @media (max-width:900px){.two-col{grid-template-columns:1fr;}}
   .status-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;}
+  .status-dot.green{background:var(--green);}
+  .status-dot.amber{background:var(--amber);}
+  .status-dot.red{background:var(--red);}
+  .status-dot.grey{background:#b0b6bf;}
   #load-error{display:none;background:#fdecec;border:1px solid #f3b9bd;color:#8a1c22;padding:14px 18px;border-radius:10px;margin-bottom:18px;font-size:13.5px;}
+
+  /* --- Equipment health (department + station status overview) --- */
+  .health-dept-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;}
+  .health-card{border:1px solid var(--border);border-radius:12px;padding:16px 18px;background:#fff;}
+  .health-card .dept-name{font-size:15px;font-weight:700;display:flex;align-items:center;}
+  .health-card .dept-sub{font-size:12px;color:var(--muted);margin-top:2px;margin-left:14px;}
+  .health-card .dept-counts{display:flex;gap:20px;margin-top:14px;}
+  .health-card .dept-counts .cnt{font-size:22px;font-weight:700;line-height:1;}
+  .health-card .dept-counts .lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;margin-top:4px;}
+  .status-pill{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:999px;margin-top:12px;}
+  .status-pill .status-dot{margin-right:0;}
+  .status-pill.green{background:var(--green-bg);color:var(--green);}
+  .status-pill.amber{background:var(--amber-bg);color:var(--amber);}
+  .status-pill.red{background:var(--red-bg);color:var(--red);}
+  .status-pill.grey{background:#eef0f3;color:#666;}
+  .dept-station-group{margin-bottom:22px;}
+  .dept-station-group:last-child{margin-bottom:0;}
+  .dept-station-group h3{font-size:13.5px;font-weight:700;display:flex;align-items:center;gap:10px;margin:0 0 10px;}
+  .station-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;}
+  .station-chip{border:1px solid var(--border);border-radius:10px;padding:11px 13px;background:#fafbfc;font-size:12.5px;}
+  .station-chip.status-red{border-color:#f3b9bd;background:#fef6f6;}
+  .station-chip.status-amber{border-color:#f2d59a;background:#fffaf0;}
+  .station-chip-top{display:flex;align-items:center;gap:7px;font-weight:600;margin-bottom:5px;}
+  .station-chip-detail{color:var(--muted);line-height:1.6;}
+  .station-chip-detail .issue-red{color:var(--red);}
+  .station-chip-detail .issue-amber{color:var(--amber);}
   footer{text-align:center;color:var(--muted);font-size:12px;padding:20px;}
 
   /* --- Auth + forms --- */
@@ -214,7 +244,21 @@
   <!-- EQUIPMENT -->
   <section id="view-equipment" class="view">
     <div class="card">
-      <h2>Equipment</h2>
+      <h2>Equipment Health</h2>
+      <div class="desc">At-a-glance status by department — from each asset's Status field and its most recent Maintenance Log entry</div>
+      <div class="health-dept-row" id="dept-health-cards"></div>
+    </div>
+    <div class="card">
+      <h2>Stations by Department</h2>
+      <div class="desc">
+        <span class="status-dot green"></span>Operational
+        &nbsp; <span class="status-dot amber"></span>Needs maintenance / running on backup
+        &nbsp; <span class="status-dot red"></span>Decommissioned — needs replacement
+      </div>
+      <div id="station-health-groups"></div>
+    </div>
+    <div class="card">
+      <h2>Equipment (full list)</h2>
       <div class="desc">Joined with Stations for department/location context</div>
       <div style="overflow-x:auto"><table id="equipment-table"></table></div>
     </div>
@@ -1148,8 +1192,139 @@ function renderAttendance(){
     </tr>`);
 }
 
+// ---------- EQUIPMENT HEALTH (department + station status overview) ----------
+// Status per asset: Decommissioned -> red (needs replacement), Backup status
+// or an unresolved "Issue Reported" as the most recent Maintenance_Log entry
+// -> amber (needs maintenance), otherwise -> green. Station/department status
+// is just the worst status among the assets they contain.
+function latestMaintenanceByAsset(){
+  const map = {};
+  (DATA.Maintenance_Log || []).forEach(m => {
+    const d = parseFlexDate(m.Log_Date);
+    const cur = map[m.Asset_ID];
+    if (!cur || (d && (!cur.__d || d >= cur.__d))){
+      map[m.Asset_ID] = Object.assign({}, m, { __d: d });
+    }
+  });
+  return map;
+}
+
+function assetHealthStatus(asset, latestMaintMap){
+  const st = (asset.Status || '').toLowerCase();
+  if (st === 'decommissioned') return 'red';
+  if (st === 'backup') return 'amber';
+  const latest = latestMaintMap[asset.Asset_ID];
+  if (latest && (latest.Type || '').toLowerCase() === 'issue reported') return 'amber';
+  return 'green';
+}
+
+function computeEquipmentHealth(){
+  const equip = DATA.Equipment || [];
+  const stations = DATA.Stations || [];
+  const latestMaint = latestMaintenanceByAsset();
+  const stationMap = {};
+  stations.forEach(s => stationMap[s.Station_ID] = s);
+
+  const depts = {};
+  const deptOrder = [];
+  function ensureDept(name){
+    if (!depts[name]){ depts[name] = { name, stations: {}, counts: { green:0, amber:0, red:0 } }; deptOrder.push(name); }
+    return depts[name];
+  }
+  // Seed every known station (even ones with no equipment yet) so they still show up.
+  stations.forEach(s => {
+    const dept = ensureDept(s.Department || 'Other');
+    dept.stations[s.Station_ID] = { station: s, assets: [], status: 'grey' };
+  });
+
+  equip.forEach(a => {
+    const st = stationMap[a.Current_Station_ID];
+    const deptName = st ? (st.Department || 'Other') : 'Unassigned';
+    const dept = ensureDept(deptName);
+    if (!dept.stations[a.Current_Station_ID]){
+      dept.stations[a.Current_Station_ID] = { station: st || { Station_ID: a.Current_Station_ID, Station_Name: a.Current_Station_ID }, assets: [], status: 'grey' };
+    }
+    const status = assetHealthStatus(a, latestMaint);
+    dept.stations[a.Current_Station_ID].assets.push({ asset: a, status, latest: latestMaint[a.Asset_ID] });
+    dept.counts[status]++;
+  });
+
+  deptOrder.forEach(name => {
+    const dept = depts[name];
+    Object.values(dept.stations).forEach(se => {
+      if (!se.assets.length){ se.status = 'grey'; return; }
+      if (se.assets.some(x => x.status === 'red')) se.status = 'red';
+      else if (se.assets.some(x => x.status === 'amber')) se.status = 'amber';
+      else se.status = 'green';
+    });
+    const statuses = Object.values(dept.stations).map(s => s.status).filter(s => s !== 'grey');
+    dept.status = statuses.includes('red') ? 'red' : statuses.includes('amber') ? 'amber' : (statuses.length ? 'green' : 'grey');
+  });
+
+  return { depts, deptOrder };
+}
+
+function statusLabel(status){
+  return { green: 'All systems operational', amber: 'Needs attention', red: 'Action needed', grey: 'No equipment logged' }[status] || 'Unknown';
+}
+
+function stationChipDetail(se){
+  if (!se.assets.length) return `<div class="station-chip-detail">No equipment currently assigned.</div>`;
+  const byStatus = { green: [], amber: [], red: [] };
+  se.assets.forEach(x => byStatus[x.status].push(x));
+  const lines = [];
+  byStatus.red.forEach(x => lines.push(`<span class="issue-red">${assetLink(x.asset.Asset_ID, x.asset.Model || x.asset.Type)} — decommissioned, needs replacement</span>`));
+  byStatus.amber.forEach(x => {
+    const isBackup = (x.asset.Status || '').toLowerCase() === 'backup';
+    const reason = isBackup ? 'running on backup' : `issue reported${x.latest && x.latest.Log_Date ? ' ' + esc(x.latest.Log_Date) : ''}`;
+    lines.push(`<span class="issue-amber">${assetLink(x.asset.Asset_ID, x.asset.Model || x.asset.Type)} — ${reason}</span>`);
+  });
+  if (byStatus.green.length){
+    lines.push(`${byStatus.green.length} operational (${byStatus.green.map(x => esc(x.asset.Model || x.asset.Type)).join(', ')})`);
+  }
+  return `<div class="station-chip-detail">${lines.join('<br>')}</div>`;
+}
+
+function renderEquipmentHealth(){
+  const { depts, deptOrder } = computeEquipmentHealth();
+
+  document.getElementById('dept-health-cards').innerHTML = deptOrder.length ? deptOrder.map(name => {
+    const d = depts[name];
+    const stationCount = Object.keys(d.stations).length;
+    return `
+    <div class="health-card">
+      <div class="dept-name"><span class="status-dot ${d.status}"></span>${esc(name)}</div>
+      <div class="dept-sub">${stationCount} station${stationCount === 1 ? '' : 's'}</div>
+      <div class="dept-counts">
+        <div><div class="cnt" style="color:var(--green);">${d.counts.green}</div><div class="lbl">Operational</div></div>
+        <div><div class="cnt" style="color:var(--amber);">${d.counts.amber}</div><div class="lbl">Needs maintenance</div></div>
+        <div><div class="cnt" style="color:var(--red);">${d.counts.red}</div><div class="lbl">Needs replacement</div></div>
+      </div>
+      <div class="status-pill ${d.status}"><span class="status-dot ${d.status}"></span>${statusLabel(d.status)}</div>
+    </div>`;
+  }).join('') : '<div class="empty">No station/equipment data yet.</div>';
+
+  const rank = { red: 0, amber: 1, green: 2, grey: 3 };
+  document.getElementById('station-health-groups').innerHTML = deptOrder.length ? deptOrder.map(name => {
+    const d = depts[name];
+    const stationEntries = Object.values(d.stations).sort((a,b) => (rank[a.status]-rank[b.status]) || String(a.station.Station_ID).localeCompare(String(b.station.Station_ID)));
+    return `
+    <div class="dept-station-group">
+      <h3><span class="status-dot ${d.status}"></span>${esc(name)}<span class="status-pill ${d.status}" style="margin-top:0;">${statusLabel(d.status)}</span></h3>
+      <div class="station-grid">
+        ${stationEntries.map(se => `
+          <div class="station-chip status-${se.status}">
+            <div class="station-chip-top"><span class="status-dot ${se.status}"></span>${esc(se.station.Station_Name || se.station.Station_ID)} <span style="color:var(--muted);font-weight:400;">(${esc(se.station.Station_ID)})</span></div>
+            ${stationChipDetail(se)}
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('') : '<div class="empty">No station data yet.</div>';
+}
+
 // ---------- EQUIPMENT ----------
 function renderEquipment(){
+  renderEquipmentHealth();
   const equip = DATA.Equipment || [];
   const stations = DATA.Stations || [];
   const stationMap = {};
