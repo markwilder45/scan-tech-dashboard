@@ -974,7 +974,11 @@ function closeCategoryDetail(){ document.getElementById('category-modal').style.
 // ---------- OVERVIEW ----------
 function renderOverview(){
   const errors = DATA.Error_Log || [];
-  const techs = DATA.Technicians || [];
+  // Only technicians marked Active (Technicians tab, column F) count toward
+  // rolling attendance and score averages — departed/inactive staff shouldn't
+  // drag down or otherwise skew current performance numbers.
+  const techs = (DATA.Technicians || []).filter(t => t.Status === 'Active');
+  const activeNames = new Set(techs.map(t => t.Name));
   const bonus = DATA.Monthly_Bonus_Summary || [];
   const scores = DATA.Tech_Scores || [];
 
@@ -996,7 +1000,7 @@ function renderOverview(){
     { label: 'Total errors logged', value: errors.length, note: 'All time, Error_Log' },
     { label: 'Pending review', value: pendingReview, note: pendingDiscussion ? `+${pendingDiscussion} pending coaching discussion` : 'Awaiting confirmation' },
     { label: 'Critical violations', value: critical, note: 'All time' },
-    { label: 'Avg. rolling attendance', value: avgAttendance !== null ? avgAttendance.toFixed(1) + '%' : '—', note: `${techs.length} active technicians` },
+    { label: 'Avg. rolling attendance', value: avgAttendance !== null ? avgAttendance.toFixed(1) + '%' : '—', note: `${techs.length} active technician${techs.length === 1 ? '' : 's'}` },
     { label: `Bonus eligible (${latestPeriod || 'latest month'})`, value: eligible, note: `${forfeited} forfeited` },
   ];
   document.getElementById('kpi-row').innerHTML = kpis.map(k => `
@@ -1029,11 +1033,11 @@ function renderOverview(){
     </div>`;
   }).join('') : '<div class="empty">No error data yet.</div>';
 
-  // Avg score per tech
+  // Avg score per tech (active technicians only)
   const scoreSums = {};
   scores.forEach(s => {
     const v = parseScore(s.Score);
-    if (v === null || !s.Name) return;
+    if (v === null || !s.Name || !activeNames.has(s.Name)) return;
     if (!scoreSums[s.Name]) scoreSums[s.Name] = { sum: 0, n: 0 };
     scoreSums[s.Name].sum += v; scoreSums[s.Name].n += 1;
   });
@@ -1133,9 +1137,12 @@ function renderErrorLogTable(){
 
 // ---------- BONUS ----------
 function renderBonus(){
-  const bonus = DATA.Monthly_Bonus_Summary || [];
-  const period = bonus.length ? bonus[0]['Month/Year'] : null;
+  const allBonus = DATA.Monthly_Bonus_Summary || [];
+  const period = allBonus.length ? allBonus[0]['Month/Year'] : null;
   document.getElementById('bonus-period').textContent = period ? `Period: ${period}` : 'No bonus data available yet';
+  // Only show active technicians (Technicians tab, column F) here.
+  const activeNames = new Set((DATA.Technicians || []).filter(t => t.Status === 'Active').map(t => t.Name));
+  const bonus = allBonus.filter(b => activeNames.has(b.Technician));
   buildTable(document.getElementById('bonus-table'),
     [{label:'Technician'},{label:'Clerical Errors'},{label:'Order Errors'},{label:'Critical Violations'},{label:'Attendance %'},{label:'Status'},{label:'Base Bonus'},{label:'Adjusted Final Bonus'}],
     bonus,
@@ -1153,7 +1160,8 @@ function renderBonus(){
 
 // ---------- ATTENDANCE ----------
 function renderAttendance(){
-  const techs = DATA.Technicians || [];
+  // Only show active technicians (Technicians tab, column F) in the summary.
+  const techs = (DATA.Technicians || []).filter(t => t.Status === 'Active');
   const log = DATA.Attendance_Log || [];
   const counts = {};
   log.forEach(a => {
