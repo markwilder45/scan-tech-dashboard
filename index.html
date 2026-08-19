@@ -455,6 +455,12 @@
       <div class="desc">Quick report that something's malfunctioning. Adds a row to Maintenance_Log as "Issue Reported" — no cost, that's filled in later on the Maintenance Log when it's actually repaired.</div>
       <form id="form-logequipissue">
         <div class="form-grid">
+          <div class="field full">
+            <label>Search by Asset ID</label>
+            <input type="text" id="logequipissue-asset-search" list="logequipissue-asset-datalist" autocomplete="off" placeholder="Type or scan an Asset ID… (e.g. d9ae8845)">
+            <datalist id="logequipissue-asset-datalist"></datalist>
+            <div class="hint" id="logequipissue-asset-search-msg">Finds the asset and fills in Station and Asset below — or just use the dropdowns directly.</div>
+          </div>
           <div class="field"><label>Station <span class="req">*</span></label><select name="Station_ID" required><option value="">Select…</option></select></div>
           <div class="field"><label>Asset <span class="req">*</span></label><select name="Asset_ID" required disabled><option value="">Select a station first…</option></select></div>
           <div class="field"><label>Date <span class="req">*</span></label><input type="date" name="Log_Date" required></div>
@@ -1900,6 +1906,60 @@ function renderMaintenanceAssetDetail(assetId){
     ${logsHtml}`;
 }
 
+// Second way to fill in the Log Equipment Issue form: type or scan an Asset
+// ID directly instead of using the Station -> Asset dropdowns. Matching an
+// ID sets both dropdowns to match, reusing their existing cascade logic —
+// the dropdowns themselves are untouched and still work on their own.
+function populateEquipIssueAssetSearch(){
+  const input = document.getElementById('logequipissue-asset-search');
+  const datalist = document.getElementById('logequipissue-asset-datalist');
+  const msg = document.getElementById('logequipissue-asset-search-msg');
+  if (!input || !datalist) return;
+
+  const stationMap = {};
+  (DATA.Stations || []).forEach(s => stationMap[s.Station_ID] = s);
+  // Same exclusion as the Asset dropdown on this form — no point reporting
+  // an issue on something already decommissioned.
+  const assets = (DATA.Equipment || []).filter(a => (a.Status || '').toLowerCase() !== 'decommissioned');
+  const stationLabel = a => {
+    const st = stationMap[a.Current_Station_ID];
+    return st ? (st.Station_Name || st.Station_ID) : (a.Current_Station_ID || 'Unknown station');
+  };
+  datalist.innerHTML = assets.map(a => `<option value="${esc(a.Asset_ID)}">${esc(a.Model || a.Type)} — ${esc(stationLabel(a))}</option>`).join('');
+
+  const defaultMsg = 'Finds the asset and fills in Station and Asset below — or just use the dropdowns directly.';
+
+  function applySearch(){
+    const val = input.value.trim();
+    if (!val){ msg.textContent = defaultMsg; msg.style.color = ''; return; }
+    const asset = assets.find(a => a.Asset_ID.toLowerCase() === val.toLowerCase());
+    if (!asset){
+      msg.textContent = `No match for "${val}" — check the ID, or use the dropdowns below.`;
+      msg.style.color = 'var(--red)';
+      return;
+    }
+    const form = document.getElementById('form-logequipissue');
+    const stationSel = form.querySelector('select[name="Station_ID"]');
+    const assetSel = form.querySelector('select[name="Asset_ID"]');
+    stationSel.value = asset.Current_Station_ID;
+    stationSel.dispatchEvent(new Event('change'));
+    assetSel.value = asset.Asset_ID;
+    msg.textContent = `Found: ${asset.Model || asset.Type} (${asset.Asset_ID}) at ${stationLabel(asset)}.`;
+    msg.style.color = 'var(--green)';
+  }
+
+  input.onchange = applySearch;
+  input.oninput = () => {
+    // Fire as soon as a full, valid ID has been typed or picked from the
+    // datalist, without waiting for the field to lose focus.
+    const val = input.value.trim();
+    if (val && assets.some(a => a.Asset_ID.toLowerCase() === val.toLowerCase())) applySearch();
+  };
+  // Keep the helper message in sync after a data refresh (e.g. the field
+  // gets cleared back to blank once the form resets after a submit).
+  if (!input.value.trim()) { msg.textContent = defaultMsg; msg.style.color = ''; }
+}
+
 function populateFormDropdowns(){
   updateStandardCategoryOptions();
   const techSel = document.querySelector('#form-logerror select[name="Technician_Name"]');
@@ -1936,6 +1996,7 @@ function populateFormDropdowns(){
   // Issue reports only show operational/backup equipment (no point reporting
   // an issue on something already decommissioned).
   populateStationAssetOptions('form-logequipissue', true);
+  populateEquipIssueAssetSearch();
   // Maintenance log only shows equipment currently flagged "Needs Service" —
   // it's for closing out a reported issue, not general browsing.
   populateNeedsServiceAssetOptions();
