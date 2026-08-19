@@ -690,6 +690,17 @@ function fmtScoreStr(s){
   return fmtPct(parseScore(s));
 }
 
+// Formats any dollar amount as clean US currency with exactly 2 decimal
+// places — some sheet columns (bonus amounts, maintenance cost) aren't
+// number-formatted at the source and can come through with long floating
+// point tails (e.g. "125.4999999997") or no $ sign at all.
+function fmtMoney(v){
+  if (v === null || v === undefined || v === '') return '';
+  const n = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
+  if (isNaN(n)) return esc(v);
+  return '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 function buildTable(el, columns, rows, rowRenderer){
   if (!rows.length){
     el.innerHTML = `<tbody><tr><td class="empty">No rows found.</td></tr></tbody>`;
@@ -809,8 +820,8 @@ function openProfile(name){
         <h2>Prior month (${esc(bonus['Month/Year'])})</h2>
         <div class="kpi-row">
           <div class="kpi"><div class="label">Status</div><div class="value" style="font-size:15px;">${statusBadge(bonus['Final Bonus Status'])}</div></div>
-          <div class="kpi"><div class="label">Base Bonus</div><div class="value">$${esc(bonus['Base Bonus Amount'])}</div></div>
-          <div class="kpi"><div class="label">Adjusted Final Bonus</div><div class="value">$${esc(bonus['Adjusted Final Bonus'])}</div></div>
+          <div class="kpi"><div class="label">Base Bonus</div><div class="value">${fmtMoney(bonus['Base Bonus Amount'])}</div></div>
+          <div class="kpi"><div class="label">Adjusted Final Bonus</div><div class="value">${fmtMoney(bonus['Adjusted Final Bonus'])}</div></div>
         </div>
         <div style="margin-top:10px;font-size:12.5px;color:var(--muted);">
           Clerical errors: ${esc(bonus['Clerical Errors'])} (${esc(bonus['Clerical Reduction %'])} reduction) ·
@@ -822,8 +833,8 @@ function openProfile(name){
         <h2>Month to date</h2>
         <div class="kpi-row">
           <div class="kpi"><div class="label">MTD Score</div><div class="value">${fmtScoreStr(bonus['MTD Score'])}</div></div>
-          <div class="kpi"><div class="label">MTD Base Bonus</div><div class="value">$${esc(bonus['MTD Base Bonus'])}</div></div>
-          <div class="kpi"><div class="label">MTD Projected Final Bonus</div><div class="value">$${esc(bonus['MTD Projected Final Bonus'])}</div></div>
+          <div class="kpi"><div class="label">MTD Base Bonus</div><div class="value">${fmtMoney(bonus['MTD Base Bonus'])}</div></div>
+          <div class="kpi"><div class="label">MTD Projected Final Bonus</div><div class="value">${fmtMoney(bonus['MTD Projected Final Bonus'])}</div></div>
         </div>
       </div>
     </div>` : `<div class="empty">No bonus summary row found for ${esc(name)} yet.</div>`;
@@ -1168,8 +1179,8 @@ function renderBonus(){
       <td>${esc(b['Critical Violations'])}</td>
       <td>${esc(b['Rolling Attendance %'])}</td>
       <td>${statusBadge(b['Final Bonus Status'])}</td>
-      <td>$${esc(b['Base Bonus Amount'])}</td>
-      <td>$${esc(b['Adjusted Final Bonus'])}</td>
+      <td>${fmtMoney(b['Base Bonus Amount'])}</td>
+      <td>${fmtMoney(b['Adjusted Final Bonus'])}</td>
     </tr>`);
 }
 
@@ -1351,7 +1362,7 @@ function renderStationDetail(stationId){
           <td>${esc(m.Type)}</td>
           <td>${techLink(m.Technician_Lead)}</td>
           <td>${esc(m.Notes)}</td>
-          <td>${m.Cost ? '$' + esc(m.Cost) : '—'}</td>
+          <td>${m.Cost ? fmtMoney(m.Cost) : '—'}</td>
         </tr>`).join('')}
       </tbody>
     </table></div>` : '<div class="empty">No maintenance or issue history for this station\'s equipment.</div>';
@@ -1455,7 +1466,7 @@ function renderEquipment(){
       maint,
       m => `<tr>
         <td>${esc(m.Log_ID)}</td><td>${esc(m.Asset_ID)}</td><td>${esc(m.Log_Date)}</td>
-        <td>${esc(m.Type)}</td><td>${esc(m.Technician_Lead)}</td><td>${esc(m.Notes)}</td><td>${esc(m.Cost)}</td>
+        <td>${esc(m.Type)}</td><td>${esc(m.Technician_Lead)}</td><td>${esc(m.Notes)}</td><td>${m.Cost ? fmtMoney(m.Cost) : '—'}</td>
       </tr>`);
   }
 }
@@ -2048,7 +2059,7 @@ function openAssetProfile(assetId){
   buildTable(document.getElementById('asset-maint-table'),
     [{label:'Date'},{label:'Type'},{label:'Lead'},{label:'Notes'},{label:'Cost'}],
     history,
-    m => `<tr><td>${esc(m.Log_Date)}</td><td>${esc(m.Type)}</td><td>${techLink(m.Technician_Lead)}</td><td>${esc(m.Notes)}</td><td>${m.Cost ? '$'+esc(m.Cost) : '—'}</td></tr>`);
+    m => `<tr><td>${esc(m.Log_Date)}</td><td>${esc(m.Type)}</td><td>${techLink(m.Technician_Lead)}</td><td>${esc(m.Notes)}</td><td>${m.Cost ? fmtMoney(m.Cost) : '—'}</td></tr>`);
 
   body.querySelectorAll('button[data-status-btn]').forEach(btn => {
     btn.addEventListener('click', async () => {
