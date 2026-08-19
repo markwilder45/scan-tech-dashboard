@@ -473,41 +473,50 @@
       <b>Sign in required</b>
       Sign in with your @memoryventures.com Google account (top right) to log maintenance.
     </div>
-    <div id="logmaintenance-form-wrap" class="card" style="display:none;">
-      <h2>Maintenance Log</h2>
-      <div class="desc">Adds a row to Maintenance_Log for cleaning, repairs, or inspections — and can update the asset's status</div>
-      <form id="form-logmaintenance">
-        <div class="form-grid">
-          <div class="field"><label>Station <span class="req">*</span></label><select name="Station_ID" required><option value="">Select…</option></select></div>
-          <div class="field"><label>Asset <span class="req">*</span></label><select name="Asset_ID" required disabled><option value="">Select a station first…</option></select></div>
-          <div class="field"><label>Date <span class="req">*</span></label><input type="date" name="Log_Date" required></div>
-          <div class="field"><label>Type <span class="req">*</span></label>
-            <select name="Type" required>
-              <option value="">Select…</option>
-              <option>Cleaning</option>
-              <option>Repair</option>
-              <option>Preventive Maintenance</option>
-              <option>Inspection</option>
-              <option>Other</option>
-            </select>
-          </div>
-          <div class="field"><label>Cost</label><input type="number" name="Cost" min="0" step="0.01" placeholder="0.00"></div>
-          <div class="field"><label>Update Status</label>
-            <select name="Status_Update">
-              <option value="">No change</option>
-              <option value="Operational">Back in service (Operational)</option>
-              <option value="Needs Service">Needs Service</option>
-              <option value="Backup">Move to Backup status</option>
-              <option value="Decommissioned">Decommissioned</option>
-            </select>
-          </div>
-          <div class="field full"><label>Notes</label><textarea name="Notes" placeholder="What was done…"></textarea></div>
+    <div id="logmaintenance-form-wrap" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <h2>Maintenance Log</h2>
+          <div class="desc">Only equipment currently flagged "Needs Service" shows up below. Adds a row to Maintenance_Log and can update the asset's status.</div>
+          <form id="form-logmaintenance">
+            <div class="form-grid">
+              <div class="field full"><label>Asset <span class="req">*</span></label><select name="Asset_ID" required><option value="">Select…</option></select></div>
+              <div class="field"><label>Station</label><input type="text" name="Station_Display" readonly disabled placeholder="Auto-fills from the asset"></div>
+              <div class="field"><label>Date <span class="req">*</span></label><input type="date" name="Log_Date" required></div>
+              <div class="field"><label>Type <span class="req">*</span></label>
+                <select name="Type" required>
+                  <option value="">Select…</option>
+                  <option>Cleaning</option>
+                  <option>Repair</option>
+                  <option>Preventive Maintenance</option>
+                  <option>Inspection</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="field"><label>Cost</label><input type="number" name="Cost" min="0" step="0.01" placeholder="0.00"></div>
+              <div class="field"><label>Update Status</label>
+                <select name="Status_Update">
+                  <option value="">No change</option>
+                  <option value="Operational">Back in service (Operational)</option>
+                  <option value="Needs Service">Needs Service</option>
+                  <option value="Backup">Move to Backup status</option>
+                  <option value="Decommissioned">Decommissioned</option>
+                </select>
+              </div>
+              <div class="field full"><label>Notes</label><textarea name="Notes" placeholder="What was done…"></textarea></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary">Log Maintenance</button>
+              <span class="form-msg" id="logmaintenance-msg"></span>
+            </div>
+          </form>
         </div>
-        <div class="form-actions">
-          <button type="submit" class="btn-primary">Log Maintenance</button>
-          <span class="form-msg" id="logmaintenance-msg"></span>
+        <div class="card">
+          <h2>Maintenance details</h2>
+          <div class="desc">Pull up the asset's history here so the tech can see what's already been tried</div>
+          <div id="logmaintenance-asset-detail"><div class="empty">No asset selected yet.</div></div>
         </div>
-      </form>
+      </div>
     </div>
     </div>
   </section>
@@ -1805,6 +1814,92 @@ function populateStationAssetOptions(formId, excludeDecommissioned){
   refreshAssets();
 }
 
+// The Maintenance Log form works like the Log Coaching form: pick an item
+// from a pre-filtered list (here, only equipment flagged "Needs Service"),
+// and its station auto-fills while the panel on the right fills in with its
+// full maintenance history.
+function populateNeedsServiceAssetOptions(){
+  const form = document.getElementById('form-logmaintenance');
+  if (!form) return;
+  const assetSel = form.querySelector('select[name="Asset_ID"]');
+  const stationDisplay = form.querySelector('input[name="Station_Display"]');
+  if (!assetSel) return;
+
+  const stationMap = {};
+  (DATA.Stations || []).forEach(s => stationMap[s.Station_ID] = s);
+  const cur = assetSel.value;
+  const needsService = (DATA.Equipment || []).filter(a => (a.Status || '').toLowerCase() === 'needs service');
+  assetSel.innerHTML = needsService.length
+    ? '<option value="">Select…</option>' + needsService.map(a => {
+        const st = stationMap[a.Current_Station_ID];
+        const stLabel = st ? (st.Station_Name || st.Station_ID) : (a.Current_Station_ID || 'Unknown station');
+        return `<option value="${esc(a.Asset_ID)}">${esc(a.Model || a.Type)} — ${esc(a.Asset_ID)} (${esc(stLabel)})</option>`;
+      }).join('')
+    : '<option value="">No equipment currently needs service</option>';
+  assetSel.value = needsService.some(a => a.Asset_ID === cur) ? cur : '';
+
+  function onAssetChange(){
+    const assetId = assetSel.value;
+    const asset = (DATA.Equipment || []).find(a => a.Asset_ID === assetId);
+    if (stationDisplay){
+      const st = asset ? stationMap[asset.Current_Station_ID] : null;
+      stationDisplay.value = asset ? (st ? (st.Station_Name || st.Station_ID) : (asset.Current_Station_ID || '')) : '';
+    }
+    renderMaintenanceAssetDetail(assetId);
+  }
+  assetSel.onchange = onAssetChange;
+  onAssetChange();
+}
+
+// Right-hand detail panel on the Maintenance Log form — shows the selected
+// asset's info plus its full maintenance/issue history.
+function renderMaintenanceAssetDetail(assetId){
+  const panel = document.getElementById('logmaintenance-asset-detail');
+  if (!panel) return;
+  if (!assetId){
+    panel.innerHTML = '<div class="empty">No asset selected yet.</div>';
+    return;
+  }
+  const asset = (DATA.Equipment || []).find(a => a.Asset_ID === assetId);
+  if (!asset){
+    panel.innerHTML = '<div class="empty">Couldn\'t find this asset — try Refresh.</div>';
+    return;
+  }
+  const stationMap = {};
+  (DATA.Stations || []).forEach(s => stationMap[s.Station_ID] = s);
+  const st = stationMap[asset.Current_Station_ID];
+  const logs = (DATA.Maintenance_Log || []).filter(m => m.Asset_ID === assetId)
+    .slice()
+    .sort((a,b) => {
+      const da = parseFlexDate(a.Log_Date), db = parseFlexDate(b.Log_Date);
+      return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+    });
+
+  const logsHtml = logs.length ? `
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Date</th><th>Type</th><th>Lead</th><th>Notes</th><th>Cost</th></tr></thead>
+      <tbody>
+        ${logs.map(m => `<tr>
+          <td>${esc(m.Log_Date)}</td>
+          <td>${esc(m.Type)}</td>
+          <td>${techLink(m.Technician_Lead)}</td>
+          <td>${esc(m.Notes)}</td>
+          <td>${m.Cost ? fmtMoney(m.Cost) : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>` : '<div class="empty">No maintenance history logged for this asset yet.</div>';
+
+  panel.innerHTML = `
+    <div class="detail-grid" style="margin-bottom:16px;">
+      <div><div class="k">Asset</div><div class="v">${assetLink(asset.Asset_ID, asset.Model || asset.Type)}</div></div>
+      <div><div class="k">Type</div><div class="v">${esc(asset.Type) || '—'}</div></div>
+      <div><div class="k">Station</div><div class="v">${esc(st ? (st.Station_Name || st.Station_ID) : asset.Current_Station_ID) || '—'}</div></div>
+      <div><div class="k">Current Status</div><div class="v"><span class="badge ${statusBadgeClass(asset.Status)}">${esc(asset.Status)}</span></div></div>
+    </div>
+    <h3 style="font-size:13px;margin:0 0 8px;">Maintenance history (${logs.length})</h3>
+    ${logsHtml}`;
+}
+
 function populateFormDropdowns(){
   updateStandardCategoryOptions();
   const techSel = document.querySelector('#form-logerror select[name="Technician_Name"]');
@@ -1839,11 +1934,11 @@ function populateFormDropdowns(){
     maintDateInput.value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
   }
   // Issue reports only show operational/backup equipment (no point reporting
-  // an issue on something already decommissioned). Maintenance log shows
-  // everything at the station, since maintenance can restore a decommissioned
-  // or backup unit.
+  // an issue on something already decommissioned).
   populateStationAssetOptions('form-logequipissue', true);
-  populateStationAssetOptions('form-logmaintenance', false);
+  // Maintenance log only shows equipment currently flagged "Needs Service" —
+  // it's for closing out a reported issue, not general browsing.
+  populateNeedsServiceAssetOptions();
   const errSel = document.querySelector('#form-logcoaching select[name="Error_ID"]');
   if (errSel && DATA.Error_Log){
     const cur = errSel.value;
