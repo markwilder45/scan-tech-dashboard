@@ -496,6 +496,7 @@
             <select name="Status_Update">
               <option value="">No change</option>
               <option value="Operational">Back in service (Operational)</option>
+              <option value="Needs Service">Needs Service</option>
               <option value="Backup">Move to Backup status</option>
               <option value="Decommissioned">Decommissioned</option>
             </select>
@@ -635,11 +636,11 @@ function statusBadge(status){
   return `<span class="badge grey">${esc(status)}</span>`;
 }
 
-// Equipment status color: Operational = green, Backup = amber, Decommissioned = red.
+// Equipment status color: Operational = green, Backup/Needs Service = amber, Decommissioned = red.
 function statusBadgeClass(status){
   const s = (status || '').toLowerCase();
   if (s === 'operational') return 'green';
-  if (s === 'backup') return 'amber';
+  if (s === 'backup' || s === 'needs service') return 'amber';
   if (s === 'decommissioned') return 'red';
   return 'grey';
 }
@@ -1246,7 +1247,9 @@ function latestMaintenanceByAsset(){
 function assetHealthStatus(asset, latestMaintMap){
   const st = (asset.Status || '').toLowerCase();
   if (st === 'decommissioned') return 'red';
-  if (st === 'backup') return 'amber';
+  if (st === 'backup' || st === 'needs service') return 'amber';
+  // Fallback for older rows whose Status was never flipped to "Needs
+  // Service" but still have an unresolved issue as their latest log entry.
   const latest = latestMaintMap[asset.Asset_ID];
   if (latest && (latest.Type || '').toLowerCase() === 'issue reported') return 'amber';
   return 'green';
@@ -1381,8 +1384,11 @@ function stationChipDetail(se){
   const lines = [];
   byStatus.red.forEach(x => lines.push(`<span class="issue-red">${assetLink(x.asset.Asset_ID, x.asset.Model || x.asset.Type)} — decommissioned, needs replacement</span>`));
   byStatus.amber.forEach(x => {
-    const isBackup = (x.asset.Status || '').toLowerCase() === 'backup';
-    const reason = isBackup ? 'running on backup' : `issue reported${x.latest && x.latest.Log_Date ? ' ' + esc(x.latest.Log_Date) : ''}`;
+    const st = (x.asset.Status || '').toLowerCase();
+    const when = x.latest && x.latest.Log_Date ? ' ' + esc(x.latest.Log_Date) : '';
+    const reason = st === 'backup' ? 'running on backup'
+      : st === 'needs service' ? `needs service${when ? ' — reported' + when : ''}`
+      : `issue reported${when}`;
     lines.push(`<span class="issue-amber">${assetLink(x.asset.Asset_ID, x.asset.Model || x.asset.Type)} — ${reason}</span>`);
   });
   if (byStatus.green.length){
@@ -1958,13 +1964,22 @@ document.getElementById('form-logequipissue').addEventListener('submit', async (
   const msg = document.getElementById('logequipissue-msg');
   const btn = ev.target.querySelector('button[type=submit]');
   const fd = new FormData(ev.target);
+  const assetId = fd.get('Asset_ID');
   btn.disabled = true; msg.textContent = 'Saving…'; msg.className = 'form-msg';
   try {
     const row = [
-      genId(), fd.get('Asset_ID'), fd.get('Log_Date'), 'Issue Reported',
+      genId(), assetId, fd.get('Log_Date'), 'Issue Reported',
       currentUser.name || currentUser.email, fd.get('Notes') || '', ''
     ];
     await sheetsAppend('Maintenance_Log', row);
+
+    // Reporting an issue takes the asset out of normal rotation — its
+    // Status becomes "Needs Service" until someone logs the fix on the
+    // Maintenance Log form and sets it back to Operational.
+    const rowNum = await sheetsFindRow('Equipment', 'A', assetId);
+    if (rowNum < 0) throw new Error('Issue was logged, but could not find this asset in the Equipment sheet to update its status — try Refresh.');
+    await sheetsUpdateRange(`Equipment!J${rowNum}:J${rowNum}`, ['Needs Service']);
+
     ev.target.reset();
     await loadAll();
     msg.textContent = 'Issue logged successfully.'; msg.className = 'form-msg success';
