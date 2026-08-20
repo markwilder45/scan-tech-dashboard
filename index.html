@@ -289,6 +289,7 @@
       <button data-sub="logcoaching">Log Coaching</button>
       <button data-sub="logattendance">Log Attendance</button>
       <button data-sub="addasset">Add Asset</button>
+      <button data-sub="bulkimport">Bulk Import</button>
       <button data-sub="logequipissue">Log Equip. Issue</button>
       <button data-sub="logmaintenance">Maintenance Log</button>
     </div>
@@ -442,6 +443,35 @@
           <span class="form-msg" id="addasset-msg"></span>
         </div>
       </form>
+    </div>
+    </div>
+
+    <div class="subview" id="sub-bulkimport">
+    <div id="bulkimport-locked" class="locked-notice" style="display:none;">
+      <b>Sign in required</b>
+      Sign in with your @memoryventures.com Google account (top right) to bulk import equipment.
+    </div>
+    <div id="bulkimport-form-wrap" class="card" style="display:none;">
+      <h2>Bulk Import Assets</h2>
+      <div class="desc">Paste rows copied from Excel or Google Sheets to add many assets at once, instead of one at a time.</div>
+      <div class="field full" style="margin-bottom:14px;">
+        <label>Column order</label>
+        <div class="hint">Model, Type, Station ID, Purchase Price, Purchase Date, In Service Date, Expected Lifecycle (months) — Purchase Price/Date, In Service Date, and Lifecycle are optional. Type must match one of the options on the Add Asset form (Computer, Scanner, Camera, etc.) and Station ID must match a Station_ID on the Stations tab (e.g. SLIDES-01). New assets are added with Status "Operational".</div>
+      </div>
+      <div class="field full">
+        <label>Paste rows here</label>
+        <textarea id="bulkimport-paste" rows="8" placeholder="Slide Snap PRO&#9;Scanner&#9;SLIDES-01&#9;950.00&#9;7/1/2026&#9;7/15/2026&#9;24"></textarea>
+        <div class="hint"><label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" id="bulkimport-has-header" checked style="width:auto;"> First row is a header (skip it)</label></div>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn-primary" id="bulkimport-preview-btn" style="background:#555;">Preview</button>
+      </div>
+      <div id="bulkimport-summary" class="desc" style="margin-top:10px;"></div>
+      <div id="bulkimport-preview-body"></div>
+      <div class="form-actions">
+        <button type="button" class="btn-primary" id="bulkimport-submit-btn" disabled>Import</button>
+        <span class="form-msg" id="bulkimport-msg"></span>
+      </div>
     </div>
     </div>
 
@@ -1640,7 +1670,7 @@ function signOut(){
 }
 
 function lockForms(locked){
-  ['logerror','logcoaching','logattendance','addasset','logequipissue','logmaintenance'].forEach(name => {
+  ['logerror','logcoaching','logattendance','addasset','bulkimport','logequipissue','logmaintenance'].forEach(name => {
     const lockedEl = document.getElementById(`${name}-locked`);
     const formEl = document.getElementById(`${name}-form-wrap`);
     if (lockedEl) lockedEl.style.display = locked ? 'block' : 'none';
@@ -1657,6 +1687,19 @@ async function sheetsAppend(tabName, rowValues){
     method: 'POST',
     headers: { Authorization: `Bearer ${currentUser.accessToken}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ values: [rowValues] })
+  });
+  if (!res.ok) throw new Error(`Sheets API error (HTTP ${res.status}) — ${await res.text()}`);
+  return res.json();
+}
+
+// Same as sheetsAppend, but writes many rows in a single API call — used by
+// Bulk Import so adding dozens of assets doesn't mean dozens of round trips.
+async function sheetsAppendMany(tabName, rowsValues){
+  const range = encodeURIComponent(`${tabName}!A1`);
+  const res = await fetch(`${SHEETS_API}/values/${range}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${currentUser.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: rowsValues })
   });
   if (!res.ok) throw new Error(`Sheets API error (HTTP ${res.status}) — ${await res.text()}`);
   return res.json();
@@ -2111,6 +2154,106 @@ document.getElementById('form-addasset').addEventListener('submit', async (ev) =
   } catch (err){
     msg.textContent = err.message; msg.className = 'form-msg error';
   } finally {
+    btn.disabled = false;
+  }
+});
+
+// ---------- Bulk Import Assets ----------
+// Same controlled Type vocabulary as the Add Asset dropdown, kept as a
+// single source of truth so bulk-imported rows stay consistent with assets
+// added one at a time.
+const BULK_IMPORT_TYPES = new Set(['Computer','Monitor','Peripherals','Scanner','Masks','Camera','Lens','Air Blower','Barcode Scanner','Player','Canopus Box','Other']);
+
+let bulkImportRows = [];
+
+function parseBulkImportRows(raw, hasHeader){
+  const stationIds = new Set((DATA.Stations || []).map(s => s.Station_ID));
+  const lines = raw.split(/\r\n|\r|\n/).filter(l => l.trim() !== '');
+  const dataLines = hasHeader ? lines.slice(1) : lines;
+  return dataLines.map((line, i) => {
+    const delim = line.includes('\t') ? '\t' : ',';
+    const cells = line.split(delim).map(c => c.trim());
+    const [model, type, stationId, price, purchaseDate, inServiceDate, lifecycle] = cells;
+    const issues = [];
+    if (!type) issues.push('Missing Type');
+    else if (!BULK_IMPORT_TYPES.has(type)) issues.push(`Unrecognized Type "${type}"`);
+    if (!stationId) issues.push('Missing Station ID');
+    else if (!stationIds.has(stationId)) issues.push(`Unknown Station ID "${stationId}"`);
+    return {
+      rowNum: i + 1,
+      model: model || '', type: type || '', stationId: stationId || '',
+      price: price || '', purchaseDate: purchaseDate || '', inServiceDate: inServiceDate || '',
+      lifecycle: lifecycle || '24',
+      issues
+    };
+  });
+}
+
+function renderBulkImportPreview(){
+  const raw = document.getElementById('bulkimport-paste').value;
+  const hasHeader = document.getElementById('bulkimport-has-header').checked;
+  const summary = document.getElementById('bulkimport-summary');
+  const body = document.getElementById('bulkimport-preview-body');
+  const submitBtn = document.getElementById('bulkimport-submit-btn');
+
+  bulkImportRows = parseBulkImportRows(raw, hasHeader);
+
+  if (!bulkImportRows.length){
+    summary.textContent = '';
+    body.innerHTML = '<div class="empty">Paste some rows above, then click Preview.</div>';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Import';
+    return;
+  }
+
+  const validCount = bulkImportRows.filter(r => !r.issues.length).length;
+  summary.textContent = `${validCount} of ${bulkImportRows.length} row${bulkImportRows.length === 1 ? '' : 's'} ready to import.`
+    + (validCount < bulkImportRows.length ? ` ${bulkImportRows.length - validCount} row${bulkImportRows.length - validCount === 1 ? '' : 's'} with issues will be skipped.` : '');
+  submitBtn.disabled = validCount === 0;
+  submitBtn.textContent = `Import ${validCount} Asset${validCount === 1 ? '' : 's'}`;
+
+  body.innerHTML = `<div style="overflow-x:auto"><table>
+    <thead><tr><th>#</th><th>Model</th><th>Type</th><th>Station</th><th>Price</th><th>Purchase Date</th><th>In Service</th><th>Lifecycle</th><th>Status</th></tr></thead>
+    <tbody>
+      ${bulkImportRows.map(r => `<tr>
+        <td>${r.rowNum}</td>
+        <td>${esc(r.model) || '—'}</td>
+        <td>${esc(r.type) || '—'}</td>
+        <td>${esc(r.stationId) || '—'}</td>
+        <td>${r.price ? fmtMoney(r.price) : '—'}</td>
+        <td>${esc(r.purchaseDate) || '—'}</td>
+        <td>${esc(r.inServiceDate) || '—'}</td>
+        <td>${esc(r.lifecycle)}</td>
+        <td>${r.issues.length ? `<span class="badge red" title="${esc(r.issues.join('; '))}">${esc(r.issues.join('; '))}</span>` : '<span class="badge green">Ready</span>'}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table></div>`;
+}
+
+document.getElementById('bulkimport-preview-btn').addEventListener('click', renderBulkImportPreview);
+
+document.getElementById('bulkimport-submit-btn').addEventListener('click', async () => {
+  const btn = document.getElementById('bulkimport-submit-btn');
+  const msg = document.getElementById('bulkimport-msg');
+  const validRows = bulkImportRows.filter(r => !r.issues.length);
+  if (!validRows.length) return;
+  btn.disabled = true; msg.textContent = 'Importing…'; msg.className = 'form-msg';
+  try {
+    const rows = validRows.map(r => [
+      genId(), r.model, r.type, r.stationId,
+      r.price, r.purchaseDate, r.inServiceDate,
+      '', r.lifecycle || '24', 'Operational'
+    ]);
+    await sheetsAppendMany('Equipment', rows);
+    document.getElementById('bulkimport-paste').value = '';
+    document.getElementById('bulkimport-summary').textContent = '';
+    document.getElementById('bulkimport-preview-body').innerHTML = '';
+    bulkImportRows = [];
+    btn.textContent = 'Import';
+    await loadAll();
+    msg.textContent = `Imported ${rows.length} asset${rows.length === 1 ? '' : 's'} successfully.`; msg.className = 'form-msg success';
+  } catch (err){
+    msg.textContent = err.message; msg.className = 'form-msg error';
     btn.disabled = false;
   }
 });
