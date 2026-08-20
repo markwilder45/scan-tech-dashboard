@@ -436,7 +436,6 @@
           <div class="field"><label>Purchase Price</label><input type="number" name="Purchase_Price" min="0" step="0.01" placeholder="0.00"></div>
           <div class="field"><label>Purchase Date</label><input type="date" name="Purchase_Date"></div>
           <div class="field"><label>In Service Date</label><input type="date" name="In_Service_Date"></div>
-          <div class="field"><label>Expected Lifecycle (months)</label><input type="number" name="Expected_Lifecycle_Months" min="0" step="1" value="24"></div>
         </div>
         <div class="form-actions">
           <button type="submit" class="btn-primary">Add Asset</button>
@@ -456,11 +455,11 @@
       <div class="desc">Paste rows copied from Excel or Google Sheets to add many assets at once, instead of one at a time.</div>
       <div class="field full" style="margin-bottom:14px;">
         <label>Column order</label>
-        <div class="hint">Model, Type, Station ID, Purchase Price, Purchase Date, In Service Date, Expected Lifecycle (months) — Purchase Price/Date, In Service Date, and Lifecycle are optional. Type must match one of the options on the Add Asset form (Computer, Scanner, Camera, etc.) and Station ID must match a Station_ID on the Stations tab (e.g. SLIDES-01). New assets are added with Status "Operational".</div>
+        <div class="hint">Model, Type, Station ID, Purchase Price, Purchase Date, In Service Date — Purchase Price/Date and In Service Date are optional. Type must match one of the options on the Add Asset form (Computer, Scanner, Camera, etc.) and Station ID must match a Station_ID on the Stations tab (e.g. SLIDES-01). New assets are added with Status "Operational"; lifecycle is calculated automatically if and when an asset is decommissioned.</div>
       </div>
       <div class="field full">
         <label>Paste rows here</label>
-        <textarea id="bulkimport-paste" rows="8" placeholder="Slide Snap PRO&#9;Scanner&#9;SLIDES-01&#9;950.00&#9;7/1/2026&#9;7/15/2026&#9;24"></textarea>
+        <textarea id="bulkimport-paste" rows="8" placeholder="Slide Snap PRO&#9;Scanner&#9;SLIDES-01&#9;950.00&#9;7/1/2026&#9;7/15/2026"></textarea>
         <div class="hint"><label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" id="bulkimport-has-header" checked style="width:auto;"> First row is a header (skip it)</label></div>
       </div>
       <div class="form-actions">
@@ -810,6 +809,22 @@ function parseFlexDate(s){
   }
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
+}
+
+function monthsBetweenDates(start, end){
+  if (!start || !end) return null;
+  let months = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+  if (end.getDate() < start.getDate()) months -= 1;
+  return Math.max(0, months);
+}
+
+function computeServiceLifeMonths(asset, decomDateStr){
+  if (!asset) return '';
+  const start = parseFlexDate(asset.In_Service_Date) || parseFlexDate(asset.Purchase_Date);
+  const end = parseFlexDate(decomDateStr) || new Date();
+  if (!start) return '';
+  const months = monthsBetweenDates(start, end);
+  return months === null ? '' : String(months);
 }
 
 function weekStartMonday(d){
@@ -2145,7 +2160,7 @@ document.getElementById('form-addasset').addEventListener('submit', async (ev) =
     const row = [
       genId(), fd.get('Model') || '', fd.get('Type'), fd.get('Current_Station_ID'),
       fd.get('Purchase_Price') || '', fd.get('Purchase_Date') || '', fd.get('In_Service_Date') || '',
-      '', fd.get('Expected_Lifecycle_Months') || '24', 'Operational'
+      '', '', 'Operational'
     ];
     await sheetsAppend('Equipment', row);
     ev.target.reset();
@@ -2173,7 +2188,7 @@ function parseBulkImportRows(raw, hasHeader){
   return dataLines.map((line, i) => {
     const delim = line.includes('\t') ? '\t' : ',';
     const cells = line.split(delim).map(c => c.trim());
-    const [model, type, stationId, price, purchaseDate, inServiceDate, lifecycle] = cells;
+    const [model, type, stationId, price, purchaseDate, inServiceDate] = cells;
     const issues = [];
     if (!type) issues.push('Missing Type');
     else if (!BULK_IMPORT_TYPES.has(type)) issues.push(`Unrecognized Type "${type}"`);
@@ -2183,7 +2198,6 @@ function parseBulkImportRows(raw, hasHeader){
       rowNum: i + 1,
       model: model || '', type: type || '', stationId: stationId || '',
       price: price || '', purchaseDate: purchaseDate || '', inServiceDate: inServiceDate || '',
-      lifecycle: lifecycle || '24',
       issues
     };
   });
@@ -2213,7 +2227,7 @@ function renderBulkImportPreview(){
   submitBtn.textContent = `Import ${validCount} Asset${validCount === 1 ? '' : 's'}`;
 
   body.innerHTML = `<div style="overflow-x:auto"><table>
-    <thead><tr><th>#</th><th>Model</th><th>Type</th><th>Station</th><th>Price</th><th>Purchase Date</th><th>In Service</th><th>Lifecycle</th><th>Status</th></tr></thead>
+    <thead><tr><th>#</th><th>Model</th><th>Type</th><th>Station</th><th>Price</th><th>Purchase Date</th><th>In Service</th><th>Status</th></tr></thead>
     <tbody>
       ${bulkImportRows.map(r => `<tr>
         <td>${r.rowNum}</td>
@@ -2223,7 +2237,6 @@ function renderBulkImportPreview(){
         <td>${r.price ? fmtMoney(r.price) : '—'}</td>
         <td>${esc(r.purchaseDate) || '—'}</td>
         <td>${esc(r.inServiceDate) || '—'}</td>
-        <td>${esc(r.lifecycle)}</td>
         <td>${r.issues.length ? `<span class="badge red" title="${esc(r.issues.join('; '))}">${esc(r.issues.join('; '))}</span>` : '<span class="badge green">Ready</span>'}</td>
       </tr>`).join('')}
     </tbody>
@@ -2242,7 +2255,7 @@ document.getElementById('bulkimport-submit-btn').addEventListener('click', async
     const rows = validRows.map(r => [
       genId(), r.model, r.type, r.stationId,
       r.price, r.purchaseDate, r.inServiceDate,
-      '', r.lifecycle || '24', 'Operational'
+      '', '', 'Operational'
     ]);
     await sheetsAppendMany('Equipment', rows);
     document.getElementById('bulkimport-paste').value = '';
@@ -2311,7 +2324,8 @@ document.getElementById('form-logmaintenance').addEventListener('submit', async 
       const today = new Date();
       const todayStr = `${today.getMonth()+1}/${today.getDate()}/${today.getFullYear()}`;
       const decomDate = statusUpdate === 'Decommissioned' ? todayStr : '';
-      await sheetsUpdateRange(`Equipment!H${rowNum}:J${rowNum}`, [decomDate, (asset && asset.Expected_Lifecycle_Months) || '', statusUpdate]);
+      const serviceLife = statusUpdate === 'Decommissioned' ? computeServiceLifeMonths(asset, decomDate) : '';
+      await sheetsUpdateRange(`Equipment!H${rowNum}:J${rowNum}`, [decomDate, serviceLife, statusUpdate]);
     }
 
     ev.target.reset();
@@ -2355,6 +2369,7 @@ function openAssetProfile(assetId){
         <div class="kpi"><div class="label">Station</div><div class="value" style="font-size:16px;">${esc(st ? st.Station_Name : asset.Current_Station_ID)}</div></div>
         <div class="kpi"><div class="label">Status</div><div class="value" style="font-size:16px;"><span class="badge ${statusBadgeClass(asset.Status)}">${esc(asset.Status)}</span></div></div>
         <div class="kpi"><div class="label">Purchase Date</div><div class="value" style="font-size:16px;">${esc(asset.Purchase_Date) || '—'}</div></div>
+        <div class="kpi"><div class="label">Service Life</div><div class="value" style="font-size:16px;">${curStatus === 'decommissioned' && asset.Expected_Lifecycle_Months ? `${esc(asset.Expected_Lifecycle_Months)} months` : '—'}</div></div>
       </div>
       <div class="form-actions" style="flex-wrap:wrap;">
         ${statusButtons.map(b => `
@@ -2389,7 +2404,8 @@ function openAssetProfile(assetId){
         const today = new Date();
         const todayStr = `${today.getMonth()+1}/${today.getDate()}/${today.getFullYear()}`;
         const decomDate = newStatus === 'Decommissioned' ? todayStr : '';
-        await sheetsUpdateRange(`Equipment!H${rowNum}:J${rowNum}`, [decomDate, asset.Expected_Lifecycle_Months || '', newStatus]);
+        const serviceLife = newStatus === 'Decommissioned' ? computeServiceLifeMonths(asset, decomDate) : '';
+        await sheetsUpdateRange(`Equipment!H${rowNum}:J${rowNum}`, [decomDate, serviceLife, newStatus]);
         smsg.textContent = 'Updated. Refreshing…'; smsg.className = 'form-msg success';
         await loadAll();
         openAssetProfile(assetId);
