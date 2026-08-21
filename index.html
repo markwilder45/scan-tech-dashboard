@@ -292,6 +292,7 @@
       <button data-sub="bulkimport">Bulk Import</button>
       <button data-sub="logequipissue">Log Equip. Issue</button>
       <button data-sub="logmaintenance">Maintenance Log</button>
+      <button data-sub="modifyasset">Modify Asset</button>
     </div>
 
     <div class="subview active" id="sub-logerror">
@@ -460,7 +461,7 @@
       <div class="field full">
         <label>Paste rows here</label>
         <textarea id="bulkimport-paste" rows="8" placeholder="Slide Snap PRO&#9;Scanner&#9;SLIDES-01&#9;950.00&#9;7/1/2026&#9;7/15/2026"></textarea>
-        <div class="hint"><label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" id="bulkimport-has-header" checked style="width:auto;"> First row is a header (skip it)</label></div>
+        <div class="hint"><label style="display:inline-flex;align-items:center;gap:6px;font-weight:400;"><input type="checkbox" id="bulkimport-has-header" style="width:auto;"> First row is a header (skip it)</label></div>
       </div>
       <div class="form-actions">
         <button type="button" class="btn-primary" id="bulkimport-preview-btn" style="background:#555;">Preview</button>
@@ -550,6 +551,63 @@
           <h2>Maintenance details</h2>
           <div class="desc">Pull up the asset's history here so the tech can see what's already been tried</div>
           <div id="logmaintenance-asset-detail"><div class="empty">No asset selected yet.</div></div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <div class="subview" id="sub-modifyasset">
+    <div id="modifyasset-locked" class="locked-notice" style="display:none;">
+      <b>Sign in required</b>
+      Sign in with your @memoryventures.com Google account (top right) to modify equipment.
+    </div>
+    <div id="modifyasset-form-wrap" style="display:none;">
+      <div class="two-col">
+        <div class="card">
+          <h2>Modify Asset</h2>
+          <div class="desc">Find an asset, then edit its details — including moving it to a different station. Updates the Equipment row directly. Status changes (Operational / Backup / Needs Service / Decommissioned) stay on the Maintenance Log or the asset's own profile, not here.</div>
+          <form id="form-modifyasset">
+            <div class="form-grid">
+              <div class="field full">
+                <label>Search by Asset ID</label>
+                <input type="text" id="modifyasset-search" list="modifyasset-datalist" autocomplete="off" placeholder="Type or scan an Asset ID… (e.g. d9ae8845)">
+                <datalist id="modifyasset-datalist"></datalist>
+                <div class="hint" id="modifyasset-search-msg">Finds the asset and selects it below — or just use the dropdown directly.</div>
+              </div>
+              <div class="field full"><label>Asset <span class="req">*</span></label><select name="Asset_ID" required><option value="">Select…</option></select></div>
+              <div class="field"><label>Model</label><input type="text" name="Model" placeholder="e.g. Slide Snap PRO" disabled></div>
+              <div class="field"><label>Type <span class="req">*</span></label>
+                <select name="Type" required disabled>
+                  <option value="">Select…</option>
+                  <option>Computer</option>
+                  <option>Monitor</option>
+                  <option>Peripherals</option>
+                  <option>Scanner</option>
+                  <option>Masks</option>
+                  <option>Camera</option>
+                  <option>Lens</option>
+                  <option>Air Blower</option>
+                  <option>Barcode Scanner</option>
+                  <option>Player</option>
+                  <option>Canopus Box</option>
+                  <option>Other</option>
+                </select>
+              </div>
+              <div class="field"><label>Station <span class="req">*</span></label><select name="Current_Station_ID" required disabled><option value="">Select an asset first…</option></select></div>
+              <div class="field"><label>Purchase Price</label><input type="number" name="Purchase_Price" min="0" step="0.01" placeholder="0.00" disabled></div>
+              <div class="field"><label>Purchase Date</label><input type="date" name="Purchase_Date" disabled></div>
+              <div class="field"><label>In Service Date</label><input type="date" name="In_Service_Date" disabled></div>
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn-primary" id="modifyasset-submit-btn" disabled>Save Changes</button>
+              <span class="form-msg" id="modifyasset-msg"></span>
+            </div>
+          </form>
+        </div>
+        <div class="card">
+          <h2>Asset details</h2>
+          <div class="desc">Current status and maintenance history for the selected asset.</div>
+          <div id="modifyasset-asset-detail"><div class="empty">No asset selected yet.</div></div>
         </div>
       </div>
     </div>
@@ -1685,7 +1743,7 @@ function signOut(){
 }
 
 function lockForms(locked){
-  ['logerror','logcoaching','logattendance','addasset','bulkimport','logequipissue','logmaintenance'].forEach(name => {
+  ['logerror','logcoaching','logattendance','addasset','bulkimport','logequipissue','logmaintenance','modifyasset'].forEach(name => {
     const lockedEl = document.getElementById(`${name}-locked`);
     const formEl = document.getElementById(`${name}-form-wrap`);
     if (lockedEl) lockedEl.style.display = locked ? 'block' : 'none';
@@ -2018,6 +2076,170 @@ function populateEquipIssueAssetSearch(){
   if (!input.value.trim()) { msg.textContent = defaultMsg; msg.style.color = ''; }
 }
 
+// ---------- Modify Asset (edit an existing item — reassign station, fix
+// details — without touching the raw Google Sheet) ----------
+function toISODateInputValue(s){
+  const d = parseFlexDate(s);
+  if (!d) return '';
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+
+// Unlike the Station -> Asset cascades used elsewhere, this form's Asset
+// list includes every asset (decommissioned too, so a typo can still be
+// fixed) and its Station dropdown always lists every station, since the
+// whole point here is to be able to reassign an asset to a different one.
+function populateModifyAssetOptions(){
+  const form = document.getElementById('form-modifyasset');
+  if (!form) return;
+  const assetSel = form.querySelector('select[name="Asset_ID"]');
+  const stationSel = form.querySelector('select[name="Current_Station_ID"]');
+  const modelInput = form.querySelector('input[name="Model"]');
+  const typeSel = form.querySelector('select[name="Type"]');
+  const priceInput = form.querySelector('input[name="Purchase_Price"]');
+  const purchaseDateInput = form.querySelector('input[name="Purchase_Date"]');
+  const inServiceInput = form.querySelector('input[name="In_Service_Date"]');
+  const submitBtn = document.getElementById('modifyasset-submit-btn');
+  if (!assetSel || !stationSel) return;
+
+  const stationMap = {};
+  (DATA.Stations || []).forEach(s => stationMap[s.Station_ID] = s);
+  const stationLabel = a => {
+    const st = stationMap[a.Current_Station_ID];
+    return st ? (st.Station_Name || st.Station_ID) : (a.Current_Station_ID || 'Unknown station');
+  };
+
+  const curAsset = assetSel.value;
+  const assets = (DATA.Equipment || []).slice().sort((a,b) => (a.Model || a.Type || '').localeCompare(b.Model || b.Type || ''));
+  assetSel.innerHTML = '<option value="">Select…</option>' +
+    assets.map(a => `<option value="${esc(a.Asset_ID)}">${esc(a.Model || a.Type)} — ${esc(a.Asset_ID)} (${esc(stationLabel(a))} • ${esc(a.Status)})</option>`).join('');
+  assetSel.value = assets.some(a => a.Asset_ID === curAsset) ? curAsset : '';
+
+  stationSel.innerHTML = '<option value="">Select…</option>' +
+    (DATA.Stations || []).map(s => `<option value="${esc(s.Station_ID)}">${esc(s.Department)} — ${esc(s.Station_Name)} (${esc(s.Station_ID)})</option>`).join('');
+
+  function setFieldsDisabled(disabled){
+    [stationSel, modelInput, typeSel, priceInput, purchaseDateInput, inServiceInput, submitBtn].forEach(el => { if (el) el.disabled = disabled; });
+  }
+
+  function onAssetChange(){
+    const assetId = assetSel.value;
+    const asset = (DATA.Equipment || []).find(a => a.Asset_ID === assetId);
+    if (!asset){
+      setFieldsDisabled(true);
+      if (modelInput) modelInput.value = '';
+      if (typeSel) typeSel.value = '';
+      stationSel.value = '';
+      if (priceInput) priceInput.value = '';
+      if (purchaseDateInput) purchaseDateInput.value = '';
+      if (inServiceInput) inServiceInput.value = '';
+      renderModifyAssetDetail(null);
+      return;
+    }
+    setFieldsDisabled(false);
+    if (modelInput) modelInput.value = asset.Model || '';
+    if (typeSel) typeSel.value = asset.Type || '';
+    stationSel.value = asset.Current_Station_ID || '';
+    if (priceInput) priceInput.value = String(asset.Purchase_Price || '').replace(/[^0-9.]/g, '');
+    if (purchaseDateInput) purchaseDateInput.value = toISODateInputValue(asset.Purchase_Date);
+    if (inServiceInput) inServiceInput.value = toISODateInputValue(asset.In_Service_Date);
+    renderModifyAssetDetail(assetId);
+  }
+  assetSel.onchange = onAssetChange;
+  onAssetChange();
+}
+
+// Right-hand read-only panel — current status plus maintenance history, so
+// whoever's editing can see the asset's context before saving changes.
+function renderModifyAssetDetail(assetId){
+  const panel = document.getElementById('modifyasset-asset-detail');
+  if (!panel) return;
+  if (!assetId){
+    panel.innerHTML = '<div class="empty">No asset selected yet.</div>';
+    return;
+  }
+  const asset = (DATA.Equipment || []).find(a => a.Asset_ID === assetId);
+  if (!asset){
+    panel.innerHTML = '<div class="empty">Couldn\'t find this asset — try Refresh.</div>';
+    return;
+  }
+  const curStatus = (asset.Status || '').toLowerCase();
+  const logs = (DATA.Maintenance_Log || []).filter(m => m.Asset_ID === assetId)
+    .slice()
+    .sort((a,b) => {
+      const da = parseFlexDate(a.Log_Date), db = parseFlexDate(b.Log_Date);
+      return (db ? db.getTime() : 0) - (da ? da.getTime() : 0);
+    });
+
+  const logsHtml = logs.length ? `
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Date</th><th>Type</th><th>Lead</th><th>Notes</th><th>Cost</th></tr></thead>
+      <tbody>
+        ${logs.map(m => `<tr>
+          <td>${esc(m.Log_Date)}</td>
+          <td>${esc(m.Type)}</td>
+          <td>${techLink(m.Technician_Lead)}</td>
+          <td>${esc(m.Notes)}</td>
+          <td>${m.Cost ? fmtMoney(m.Cost) : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>` : '<div class="empty">No maintenance history logged for this asset yet.</div>';
+
+  panel.innerHTML = `
+    <div class="detail-grid" style="margin-bottom:16px;">
+      <div><div class="k">Asset</div><div class="v">${assetLink(asset.Asset_ID, asset.Model || asset.Type)}</div></div>
+      <div><div class="k">Current Status</div><div class="v"><span class="badge ${statusBadgeClass(asset.Status)}">${esc(asset.Status)}</span></div></div>
+      ${curStatus === 'decommissioned' && asset.Expected_Lifecycle_Months ? `<div><div class="k">Service Life</div><div class="v">${esc(asset.Expected_Lifecycle_Months)} months</div></div>` : ''}
+    </div>
+    <h3 style="font-size:13px;margin:0 0 8px;">Maintenance history (${logs.length})</h3>
+    ${logsHtml}`;
+}
+
+// Same Asset ID search/autocomplete pattern as Log Equipment Issue, but
+// covering every asset (including decommissioned) since fixing a typo on a
+// retired item is still a valid reason to be here.
+function populateModifyAssetSearch(){
+  const input = document.getElementById('modifyasset-search');
+  const datalist = document.getElementById('modifyasset-datalist');
+  const msg = document.getElementById('modifyasset-search-msg');
+  if (!input || !datalist) return;
+
+  const stationMap = {};
+  (DATA.Stations || []).forEach(s => stationMap[s.Station_ID] = s);
+  const assets = DATA.Equipment || [];
+  const stationLabel = a => {
+    const st = stationMap[a.Current_Station_ID];
+    return st ? (st.Station_Name || st.Station_ID) : (a.Current_Station_ID || 'Unknown station');
+  };
+  datalist.innerHTML = assets.map(a => `<option value="${esc(a.Asset_ID)}">${esc(a.Model || a.Type)} — ${esc(stationLabel(a))}</option>`).join('');
+
+  const defaultMsg = 'Finds the asset and selects it below — or just use the dropdown directly.';
+
+  function applySearch(){
+    const val = input.value.trim();
+    if (!val){ msg.textContent = defaultMsg; msg.style.color = ''; return; }
+    const asset = assets.find(a => a.Asset_ID.toLowerCase() === val.toLowerCase());
+    if (!asset){
+      msg.textContent = `No match for "${val}" — check the ID, or use the dropdown below.`;
+      msg.style.color = 'var(--red)';
+      return;
+    }
+    const form = document.getElementById('form-modifyasset');
+    const assetSel = form.querySelector('select[name="Asset_ID"]');
+    assetSel.value = asset.Asset_ID;
+    assetSel.dispatchEvent(new Event('change'));
+    msg.textContent = `Found: ${asset.Model || asset.Type} (${asset.Asset_ID}) at ${stationLabel(asset)}.`;
+    msg.style.color = 'var(--green)';
+  }
+
+  input.onchange = applySearch;
+  input.oninput = () => {
+    const val = input.value.trim();
+    if (val && assets.some(a => a.Asset_ID.toLowerCase() === val.toLowerCase())) applySearch();
+  };
+  if (!input.value.trim()) { msg.textContent = defaultMsg; msg.style.color = ''; }
+}
+
 function populateFormDropdowns(){
   updateStandardCategoryOptions();
   const techSel = document.querySelector('#form-logerror select[name="Technician_Name"]');
@@ -2058,6 +2280,10 @@ function populateFormDropdowns(){
   // Maintenance log only shows equipment currently flagged "Needs Service" —
   // it's for closing out a reported issue, not general browsing.
   populateNeedsServiceAssetOptions();
+  // Modify Asset shows every asset — it's for fixing details or reassigning
+  // a station, not just working an open issue.
+  populateModifyAssetOptions();
+  populateModifyAssetSearch();
   const errSel = document.querySelector('#form-logcoaching select[name="Error_ID"]');
   if (errSel && DATA.Error_Log){
     const cur = errSel.value;
@@ -2331,6 +2557,36 @@ document.getElementById('form-logmaintenance').addEventListener('submit', async 
     ev.target.reset();
     await loadAll();
     msg.textContent = 'Maintenance logged successfully.'; msg.className = 'form-msg success';
+  } catch (err){
+    msg.textContent = err.message; msg.className = 'form-msg error';
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+document.getElementById('form-modifyasset').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const msg = document.getElementById('modifyasset-msg');
+  const btn = ev.target.querySelector('button[type=submit]');
+  const fd = new FormData(ev.target);
+  const assetId = fd.get('Asset_ID');
+  if (!assetId){ msg.textContent = 'Select an asset first.'; msg.className = 'form-msg error'; return; }
+  if (!confirm(`Save changes to ${assetId}? This updates the live Equipment sheet.`)) return;
+  btn.disabled = true; msg.textContent = 'Saving…'; msg.className = 'form-msg';
+  try {
+    const rowNum = await sheetsFindRow('Equipment', 'A', assetId);
+    if (rowNum < 0) throw new Error('Could not find this asset in the Equipment sheet — try Refresh.');
+    // Columns B:G — Model, Type, Station, Purchase Price, Purchase Date, In
+    // Service Date. Status and decommission (H:J) are intentionally left
+    // alone here — those stay on the Maintenance Log / asset profile so
+    // there's one place that drives status changes.
+    const row = [
+      fd.get('Model') || '', fd.get('Type'), fd.get('Current_Station_ID'),
+      fd.get('Purchase_Price') || '', fd.get('Purchase_Date') || '', fd.get('In_Service_Date') || ''
+    ];
+    await sheetsUpdateRange(`Equipment!B${rowNum}:G${rowNum}`, row);
+    msg.textContent = 'Saved.'; msg.className = 'form-msg success';
+    await loadAll();
   } catch (err){
     msg.textContent = err.message; msg.className = 'form-msg error';
   } finally {
