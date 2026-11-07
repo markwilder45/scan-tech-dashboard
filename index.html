@@ -29,7 +29,7 @@
   main{padding:24px 28px 60px;max-width:1300px;margin:0 auto;}
   .view{display:none;}
   .view.active{display:block;}
-  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:22px;}
+  .kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:22px;}
   .kpi{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 18px;box-shadow:var(--shadow);}
   .kpi .label{font-size:11.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:600;}
   .kpi .value{font-size:26px;font-weight:700;margin-top:6px;}
@@ -49,6 +49,8 @@
   .controls{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
   .controls input,.controls select{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;}
   .controls input{flex:1;min-width:180px;}
+  .controls input[type=checkbox]{flex:none;min-width:0;}
+  #bonus-table td:first-child,#staffing-table td:first-child{white-space:nowrap;}
   .bar-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px;}
   .bar-row .name{width:150px;flex-shrink:0;color:var(--text);}
   .bar-track{flex:1;background:#eef0f3;border-radius:6px;height:14px;overflow:hidden;}
@@ -145,6 +147,35 @@
   .cat-link{cursor:pointer;color:var(--accent);text-decoration:underline;text-underline-offset:2px;}
   .cat-tooltip{display:none;position:absolute;left:0;top:calc(100% + 4px);background:#12203f;color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.6;white-space:nowrap;z-index:30;box-shadow:var(--shadow);}
   .cat-bar-row:hover .cat-tooltip{display:block;}
+
+  /* --- Period toggle, sortable tables, action panels --- */
+  .period-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
+  .period-bar .lbl{font-size:12.5px;color:var(--muted);font-weight:600;}
+  .seg{display:inline-flex;background:#e7eaef;border-radius:999px;padding:3px;gap:2px;}
+  .seg button{border:none;background:transparent;padding:7px 14px;border-radius:999px;font-size:12.5px;font-weight:600;color:#3b4252;cursor:pointer;}
+  .seg button.active{background:#fff;color:var(--text);box-shadow:0 1px 2px rgba(16,24,40,.12);}
+  .seg button:hover:not(.active){color:var(--text);}
+  .period-range{font-size:12.5px;color:var(--muted);}
+  th.sortable{cursor:pointer;user-select:none;}
+  th.sortable:hover{color:var(--text);}
+  th.sortable .arr{display:inline-block;width:10px;margin-left:3px;color:var(--accent);}
+  .btn-sm{border:1px solid var(--border);background:#fff;color:var(--text);padding:5px 11px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;}
+  .btn-sm:hover{background:#f0f3f8;}
+  .btn-sm:disabled{opacity:.5;cursor:not-allowed;}
+  .btn-confirm{background:var(--green);color:#fff;border:none;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn-remove{background:#fff;color:var(--red);border:1px solid #f3b9bd;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn-neutral{background:#fff;color:var(--text);border:1px solid var(--border);padding:10px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;}
+  .btn-confirm:disabled,.btn-remove:disabled,.btn-neutral:disabled{opacity:.55;cursor:not-allowed;}
+  .action-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px;}
+  .callout{background:#fff3dc;border:1px solid #f2d59a;color:#6b4100;padding:12px 16px;border-radius:10px;font-size:13px;line-height:1.5;margin-bottom:16px;}
+  .callout.info{background:#eef4ff;border-color:#c9d8f7;color:#1c3a7a;}
+  .muted{color:var(--muted);}
+  .kpi.clickable{cursor:pointer;}
+  .kpi.clickable:hover{border-color:#c9d8f7;}
+  .kpi .delta{font-size:11.5px;font-weight:600;margin-left:6px;}
+  .kpi .delta.up{color:var(--red);} .kpi .delta.down{color:var(--green);}
+  tr.row-removed td{color:#8a909b;}
+  tr.row-removed td .tech-link{color:#8a909b;}
 </style>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -170,6 +201,7 @@
   <button data-view="errorlog">Error Log</button>
   <button data-view="bonus">Bonus Overview</button>
   <button data-view="attendance">Attendance</button>
+  <button data-view="staffing">Staffing</button>
   <button data-view="equipment">Equipment</button>
   <span style="width:1px;background:#2a3b63;margin:6px 4px;"></span>
   <button data-view="logactivity">+ Log / Add</button>
@@ -180,22 +212,32 @@
 
   <!-- OVERVIEW -->
   <section id="view-overview" class="view active">
+    <div class="period-bar">
+      <span class="lbl">Showing</span>
+      <div class="seg" id="overview-period">
+        <button data-period="month" class="active">This month</button>
+        <button data-period="lastmonth">Last month</button>
+        <button data-period="90d">Last 90 days</button>
+        <button data-period="all">All time</button>
+      </div>
+      <span class="period-range" id="overview-period-range"></span>
+    </div>
     <div class="kpi-row" id="kpi-row"></div>
     <div class="two-col">
       <div class="card">
-        <h2>Error categories (all time)</h2>
-        <div class="desc">Standard_Category breakdown across every logged error</div>
+        <h2 id="category-bars-title">Error categories</h2>
+        <div class="desc">Standard_Category breakdown by incident date — removed errors excluded. Click a category for details.</div>
         <div id="category-bars"></div>
       </div>
       <div class="card">
-        <h2>Avg. daily score by technician</h2>
-        <div class="desc">Output ÷ expected pace, averaged across all logged days</div>
+        <h2 id="score-bars-title">Avg. daily score by technician</h2>
+        <div class="desc">Output ÷ expected pace, averaged across logged days in this period (active technicians)</div>
         <div id="score-bars"></div>
       </div>
     </div>
     <div class="card">
       <h2>Most recent errors</h2>
-      <div class="desc">Latest 8 entries from Error_Log</div>
+      <div class="desc">Latest 8 errors in this period, by order logged</div>
       <div style="overflow-x:auto"><table id="recent-errors-table"></table></div>
     </div>
   </section>
@@ -204,7 +246,14 @@
   <section id="view-pending" class="view">
     <div class="card">
       <h2>Pending Review</h2>
-      <div class="desc">Error_Log rows with Confirmation_Status = "Pending Review", plus any flagged "Pending Discussion" for coaching</div>
+      <div class="desc">Errors awaiting a decision (Confirmation_Status = "Pending Review") plus any still flagged "Pending Discussion" for coaching. <b>Click any row</b> to confirm the penalty, remove it so it has no bonus impact, or log the coaching conversation.</div>
+      <div class="controls">
+        <select id="pending-type-filter">
+          <option value="">All pending items</option>
+          <option value="review">Needs review decision</option>
+          <option value="coaching">Needs coaching</option>
+        </select>
+      </div>
       <div style="overflow-x:auto"><table id="pending-table"></table></div>
     </div>
   </section>
@@ -213,21 +262,60 @@
   <section id="view-errorlog" class="view">
     <div class="card">
       <h2>Full Error Log</h2>
+      <div class="desc">Click a column header to sort. Click a row to review it or log coaching.</div>
       <div class="controls">
         <input type="text" id="errorlog-search" placeholder="Search technician, order ID, description…">
+        <select id="errorlog-class-filter"><option value="">All classifications</option></select>
+        <select id="errorlog-cat-filter"><option value="">All categories</option></select>
         <select id="errorlog-status-filter"><option value="">All statuses</option></select>
         <select id="errorlog-tech-filter"><option value="">All technicians</option></select>
+        <button type="button" class="btn-sm" id="errorlog-clear">Clear filters</button>
       </div>
+      <div class="desc" id="errorlog-count" style="margin-bottom:8px;"></div>
       <div style="overflow-x:auto"><table id="errorlog-table"></table></div>
     </div>
   </section>
 
   <!-- BONUS -->
   <section id="view-bonus" class="view">
+    <div id="bonus-missing"></div>
     <div class="card">
       <h2>Monthly Bonus Summary</h2>
       <div class="desc" id="bonus-period"></div>
+      <div class="controls">
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" id="bonus-show-inactive"> Include inactive technicians</label>
+        <span class="muted" id="bonus-inactive-note" style="font-size:12.5px;"></span>
+        <span style="flex:1"></span>
+        <button type="button" class="btn-sm" id="bonus-export-btn">⬇ Export payroll report (CSV)</button>
+        <button type="button" class="btn-sm" id="bonus-print-btn">Print / Save as PDF</button>
+      </div>
       <div style="overflow-x:auto"><table id="bonus-table"></table></div>
+    </div>
+  </section>
+
+  <!-- STAFFING -->
+  <section id="view-staffing" class="view">
+    <div class="kpi-row" id="staffing-kpis"></div>
+    <div id="staffing-add-wrap"></div>
+    <div class="card">
+      <h2>Technicians</h2>
+      <div class="desc">From the Technicians tab. Click a column header to sort, a name to open the profile. Signed-in leads can switch a technician between Active and Inactive.</div>
+      <div class="controls">
+        <input type="text" id="staffing-search" placeholder="Search name…">
+        <select id="staffing-status-filter">
+          <option value="Active">Active only</option>
+          <option value="Inactive">Inactive only</option>
+          <option value="">All technicians</option>
+        </select>
+        <span style="flex:1"></span>
+        <button type="button" class="btn-primary" id="staffing-add-toggle" style="padding:8px 14px;">+ Add technician</button>
+      </div>
+      <div style="overflow-x:auto"><table id="staffing-table"></table></div>
+    </div>
+    <div class="card" id="staffing-dq-card">
+      <h2>Sheet checks</h2>
+      <div class="desc">Problems in the sheet that quietly change bonuses or hide data. Names used in Tech_Scores, Error_Log or Attendance_Log that don't match anyone on the Technicians tab. These rows are left out of bonuses, scores and profiles until the name is corrected in the sheet.</div>
+      <div id="staffing-dq"></div>
     </div>
   </section>
 
@@ -249,6 +337,13 @@
 
   <!-- EQUIPMENT -->
   <section id="view-equipment" class="view">
+    <div class="period-bar">
+      <span class="lbl">Department</span>
+      <div class="seg" id="equip-dept-filter"></div>
+      <span class="lbl" style="margin-left:6px;">Station type</span>
+      <select id="equip-type-filter" style="padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;"></select>
+      <span class="period-range" id="equip-filter-note"></span>
+    </div>
     <div class="card">
       <h2>Equipment Health</h2>
       <div class="desc">At-a-glance status by department — from each asset's Status field and its most recent Maintenance Log entry</div>
@@ -727,13 +822,161 @@ function esc(s){
   return String(s ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
 }
 
+// ---------- Shared helpers (name matching, statuses, periods, sorting) ----------
+
+// Names are compared ignoring case and extra/trailing spaces, so a stray
+// double space in one tab ("Theresa  Whitaker") doesn't hide a person.
+function nameKey(s){ return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase(); }
+
+// Confirmation_Status values. The bonus formulas in Monthly_Bonus_Summary
+// only count rows whose status is exactly CONFIRMED_STATUS, so any other
+// value (including REMOVED_STATUS) has no bonus impact.
+const CONFIRMED_STATUS = 'Confirmed Penalty';
+const PENDING_STATUS = 'Pending Review';
+const REMOVED_STATUS = 'Removed - No Impact';
+function isRemoved(e){ return /^removed/i.test((e && e.Confirmation_Status) || ''); }
+function isPendingReview(e){ return ((e && e.Confirmation_Status) || '').toLowerCase() === 'pending review'; }
+function needsCoaching(e){ return !isRemoved(e) && ((e && e['Coaching Status']) || '').toLowerCase().includes('pending'); }
+
+// Date ranges used by the Overview period toggle and elsewhere.
+function endOfDay(d){ return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999); }
+function periodRange(key, now){
+  now = now || new Date();
+  const y = now.getFullYear(), m = now.getMonth(), d = now.getDate();
+  const monthName = dt => dt.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  if (key === 'month'){
+    const start = new Date(y, m, 1);
+    return { key, start, end: endOfDay(new Date(y, m + 1, 0)), label: 'This month', long: monthName(start) + ' (month to date)' };
+  }
+  if (key === 'lastmonth'){
+    const start = new Date(y, m - 1, 1);
+    return { key, start, end: endOfDay(new Date(y, m, 0)), label: 'Last month', long: monthName(start) };
+  }
+  if (key === '90d'){
+    const start = new Date(y, m, d - 89);
+    return { key, start, end: endOfDay(now), label: 'Last 90 days', long: `${fmtShort(start)}/${start.getFullYear()} – ${fmtShort(now)}/${now.getFullYear()}` };
+  }
+  return { key: 'all', start: null, end: null, label: 'All time', long: 'Every logged entry' };
+}
+// The equal-length window just before a range, for "vs prior period" notes.
+function priorRange(r){
+  if (!r || !r.start) return null;
+  if (r.key === 'month' || r.key === 'lastmonth'){
+    const s = new Date(r.start.getFullYear(), r.start.getMonth() - 1, 1);
+    // Compare month-to-date against the same number of days last month.
+    let e = endOfDay(new Date(r.start.getFullYear(), r.start.getMonth(), 0));
+    if (r.key === 'month'){
+      const today = new Date();
+      const sameDay = new Date(s.getFullYear(), s.getMonth(), Math.min(today.getDate(), e.getDate()));
+      e = endOfDay(sameDay);
+    }
+    return { start: s, end: e };
+  }
+  const days = Math.round((r.end - r.start) / 86400000);
+  return { start: new Date(r.start.getFullYear(), r.start.getMonth(), r.start.getDate() - days), end: new Date(r.start.getTime() - 1) };
+}
+function inRange(d, r){ if (!r || !r.start) return true; return !!d && d >= r.start && d <= r.end; }
+
+// Bonus period text "2026/10" -> { start, end } for October 2026.
+function bonusPeriodRange(p){
+  const m = String(p || '').match(/^(\d{4})\D(\d{1,2})$/);
+  if (!m) return null;
+  const y = +m[1], mo = +m[2] - 1;
+  return { start: new Date(y, mo, 1), end: endOfDay(new Date(y, mo + 1, 0)) };
+}
+
+// Sum of Tech_Scores hours and output for one tech within a date range.
+function scoreTotals(name, r){
+  const k = nameKey(name);
+  let hours = 0, output = 0, days = 0, scoreSum = 0, scoreN = 0, last = null;
+  (DATA.Tech_Scores || []).forEach(s => {
+    if (nameKey(s.Name) !== k) return;
+    const d = parseFlexDate(s.Date);
+    if (!inRange(d, r)) return;
+    const h = parseFloat(String(s.Hours).replace(/,/g, '')) || 0;
+    const o = parseFloat(String(s.Output).replace(/,/g, '')) || 0;
+    hours += h; output += o; days += 1;
+    const v = parseScore(s.Score); if (v !== null){ scoreSum += v; scoreN += 1; }
+    if (d && (!last || d > last)) last = d;
+  });
+  return { hours, output, days, weighted: hours > 0 ? output / hours : null, avgDaily: scoreN ? scoreSum / scoreN : null, last };
+}
+
+function fmtHours(h){ return (Math.round(h * 100) / 100).toLocaleString('en-US', { maximumFractionDigits: 2 }); }
+function fmtDateUS(d){ return d ? `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}` : '—'; }
+
+// ---- Sortable tables ----
+// buildSortableTable(el, columns, rows, rowRenderer, defaultSort)
+//   columns: [{ label, key, get(row) -> value used for sorting }]
+// Clicking a header toggles sort on that column; empty values always sink
+// to the bottom. Sort choice is remembered per table across refreshes.
+const SORT_STATE = {};
+function sortCompare(a, b){
+  if (a instanceof Date) a = a.getTime();
+  if (b instanceof Date) b = b.getTime();
+  if (typeof a === 'number' && typeof b === 'number') return a - b;
+  return String(a).localeCompare(String(b), 'en', { numeric: true, sensitivity: 'base' });
+}
+function isBlankSort(v){ return v === null || v === undefined || v === '' || (typeof v === 'number' && isNaN(v)); }
+function buildSortableTable(el, columns, rows, rowRenderer, defaultSort, footerHtml){
+  const id = el.id;
+  if (!SORT_STATE[id]) SORT_STATE[id] = Object.assign({ key: null, dir: 1 }, defaultSort || {});
+  const st = SORT_STATE[id];
+  const col = columns.find(c => c.key && c.key === st.key);
+  let sorted = rows;
+  if (col && col.get){
+    sorted = rows.map((r, i) => ({ r, i, v: col.get(r) })).sort((x, y) => {
+      const bx = isBlankSort(x.v), by = isBlankSort(y.v);
+      if (bx && by) return x.i - y.i;
+      if (bx) return 1;
+      if (by) return -1;
+      return (sortCompare(x.v, y.v) * st.dir) || (x.i - y.i);
+    }).map(x => x.r);
+  }
+  el.__rerender = () => buildSortableTable(el, columns, rows, rowRenderer, defaultSort, footerHtml);
+  if (!sorted.length){
+    el.innerHTML = `<tbody><tr><td class="empty">No rows found.</td></tr></tbody>`;
+    return;
+  }
+  const thead = `<thead><tr>${columns.map(c => {
+    if (!c.key) return `<th>${esc(c.label)}</th>`;
+    const arr = st.key === c.key ? (st.dir === 1 ? '▲' : '▼') : '';
+    return `<th class="sortable" data-sort-key="${esc(c.key)}" title="Sort by ${esc(c.label)}">${esc(c.label)}<span class="arr">${arr}</span></th>`;
+  }).join('')}</tr></thead>`;
+  el.innerHTML = thead + `<tbody>${sorted.map(rowRenderer).join('')}</tbody>` + (footerHtml || '');
+}
+document.addEventListener('click', (e) => {
+  const th = e.target.closest('th.sortable[data-sort-key]');
+  if (!th) return;
+  const table = th.closest('table');
+  if (!table || !table.__rerender) return;
+  const st = SORT_STATE[table.id] || (SORT_STATE[table.id] = { key: null, dir: 1 });
+  const key = th.dataset.sortKey;
+  if (st.key === key) st.dir = -st.dir; else { st.key = key; st.dir = 1; }
+  table.__rerender();
+});
+
+// localStorage is a per-browser convenience only (remembered filters); it
+// can be unavailable, so every access is guarded.
+function prefGet(k, dflt){ try { const v = localStorage.getItem('scanTech.' + k); return v === null ? dflt : v; } catch (_){ return dflt; } }
+function prefSet(k, v){ try { localStorage.setItem('scanTech.' + k, v); } catch (_){} }
+
+function showToast(text){
+  const t = document.createElement('div');
+  t.className = 'toast'; t.textContent = text;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
 function statusBadge(status){
   const s = (status || '').toLowerCase();
   if (s.includes('eligible') && s.includes('100')) return `<span class="badge green">${esc(status)}</span>`;
   if (s.includes('eligible')) return `<span class="badge amber">${esc(status)}</span>`;
   if (s.includes('forfeited')) return `<span class="badge red">${esc(status)}</span>`;
   if (s.includes('pending')) return `<span class="badge amber">${esc(status)}</span>`;
-  if (s.includes('confirmed')) return `<span class="badge grey">${esc(status)}</span>`;
+  if (s.startsWith('removed')) return `<span class="badge grey" style="text-decoration:line-through;text-decoration-thickness:1px;" title="Removed — no bonus impact">${esc(status)}</span>`;
+  if (s.includes('confirmed penalty')) return `<span class="badge red">${esc(status)}</span>`;
+  if (s.includes('confirmed') || s.includes('complete')) return `<span class="badge green">${esc(status)}</span>`;
   if (!status) return `<span class="badge grey">—</span>`;
   return `<span class="badge grey">${esc(status)}</span>`;
 }
@@ -847,6 +1090,7 @@ function render(){
   renderErrorLog();
   renderBonus();
   renderAttendance();
+  renderStaffing();
   renderEquipment();
   populateFormDropdowns();
 }
@@ -903,7 +1147,7 @@ function weekStartMonday(d){
 function fmtShort(d){ return `${d.getMonth()+1}/${d.getDate()}`; }
 
 function computeWeeklyScores(name, numWeeks){
-  const rows = (DATA.Tech_Scores || []).filter(s => s.Name === name);
+  const rows = (DATA.Tech_Scores || []).filter(s => nameKey(s.Name) === nameKey(name));
   const byWeek = {};
   rows.forEach(s => {
     const d = parseFlexDate(s.Date);
@@ -935,13 +1179,25 @@ function computeWeeklyScores(name, numWeeks){
 
 // ---------- Technician profile modal ----------
 function openProfile(name){
-  const errors = (DATA.Error_Log || []).filter(e => e.Technician_Name === name).reverse();
-  const attendance = (DATA.Attendance_Log || []).filter(a => a.Technician_Name === name).reverse();
-  const bonus = (DATA.Monthly_Bonus_Summary || []).find(b => b.Technician === name);
+  openProfileName = name;
+  const k = nameKey(name);
+  const errors = (DATA.Error_Log || []).filter(e => nameKey(e.Technician_Name) === k).reverse();
+  const attendance = (DATA.Attendance_Log || []).filter(a => nameKey(a.Technician_Name) === k).reverse();
+  const bonus = (DATA.Monthly_Bonus_Summary || []).find(b => nameKey(b.Technician) === k);
+  const tech = (DATA.Technicians || []).find(t => nameKey(t.Name) === k);
   const weeks = computeWeeklyScores(name, 5);
 
   document.getElementById('profile-name').textContent = name;
   const body = document.getElementById('profile-body');
+
+  // Prior-month and month-to-date hours/score straight from Tech_Scores, so
+  // these show even for someone missing from Monthly_Bonus_Summary.
+  const lastM = periodRange('lastmonth'), thisM = periodRange('month');
+  const prevTot = scoreTotals(name, lastM), mtdTot = scoreTotals(name, thisM);
+  const statusLine = tech
+    ? `<div class="desc" style="margin:-4px 0 14px;">${tech.Status === 'Active' ? '<span class="badge green">Active</span>' : '<span class="badge grey">Inactive</span>'}
+       &nbsp;Hired ${esc(tech.Hire_Date) || '—'} · Rolling attendance ${tech.Rolling_Attendance_Pct ? (parseFloat(tech.Rolling_Attendance_Pct) * 100).toFixed(1) + '%' : '—'}</div>`
+    : `<div class="callout">“${esc(name)}” isn't on the Technicians tab — check the spelling in the sheet.</div>`;
 
   const bonusHtml = bonus ? `
     <div class="two-col">
@@ -949,6 +1205,8 @@ function openProfile(name){
         <h2>Prior month (${esc(bonus['Month/Year'])})</h2>
         <div class="kpi-row">
           <div class="kpi"><div class="label">Status</div><div class="value" style="font-size:15px;">${statusBadge(bonus['Final Bonus Status'])}</div></div>
+          <div class="kpi"><div class="label">Hours worked</div><div class="value">${fmtHours(scoreTotals(name, bonusPeriodRange(bonus['Month/Year']) || lastM).hours)}</div></div>
+          <div class="kpi"><div class="label">Prior month score</div><div class="value">${fmtScoreStr(bonus['Prior Month Score'])}</div></div>
           <div class="kpi"><div class="label">Base Bonus</div><div class="value">${fmtMoney(bonus['Base Bonus Amount'])}</div></div>
           <div class="kpi"><div class="label">Adjusted Final Bonus</div><div class="value">${fmtMoney(bonus['Adjusted Final Bonus'])}</div></div>
         </div>
@@ -961,12 +1219,33 @@ function openProfile(name){
       <div class="card">
         <h2>Month to date</h2>
         <div class="kpi-row">
+          <div class="kpi"><div class="label">MTD Hours</div><div class="value">${fmtHours(mtdTot.hours)}</div></div>
           <div class="kpi"><div class="label">MTD Score</div><div class="value">${fmtScoreStr(bonus['MTD Score'])}</div></div>
           <div class="kpi"><div class="label">MTD Base Bonus</div><div class="value">${fmtMoney(bonus['MTD Base Bonus'])}</div></div>
           <div class="kpi"><div class="label">MTD Projected Final Bonus</div><div class="value">${fmtMoney(bonus['MTD Projected Final Bonus'])}</div></div>
         </div>
       </div>
-    </div>` : `<div class="empty">No bonus summary row found for ${esc(name)} yet.</div>`;
+    </div>` : `
+    <div class="callout"><b>${esc(name)} has no row on the Monthly_Bonus_Summary tab</b>, so the sheet isn't calculating a bonus for them.
+      ${currentUser ? `<button type="button" class="btn-sm" data-add-bonus-row="${esc(name)}" style="margin-left:6px;">Add bonus summary row</button>` : 'Sign in, then use “Add missing rows” on the Bonus Overview tab to fix this.'}</div>
+    <div class="two-col">
+      <div class="card">
+        <h2>Prior month (${esc(lastM.long)}) — from Tech_Scores</h2>
+        <div class="kpi-row">
+          <div class="kpi"><div class="label">Hours worked</div><div class="value">${fmtHours(prevTot.hours)}</div></div>
+          <div class="kpi"><div class="label">Prior month score</div><div class="value">${fmtPct(prevTot.weighted)}</div></div>
+          <div class="kpi"><div class="label">Days logged</div><div class="value">${prevTot.days}</div></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Month to date — from Tech_Scores</h2>
+        <div class="kpi-row">
+          <div class="kpi"><div class="label">MTD Hours</div><div class="value">${fmtHours(mtdTot.hours)}</div></div>
+          <div class="kpi"><div class="label">MTD Score</div><div class="value">${fmtPct(mtdTot.weighted)}</div></div>
+          <div class="kpi"><div class="label">Days logged</div><div class="value">${mtdTot.days}</div></div>
+        </div>
+      </div>
+    </div>`;
 
   const weeksHtml = `
     <div class="card">
@@ -980,7 +1259,7 @@ function openProfile(name){
         </div>`).join('')}
     </div>`;
 
-  body.innerHTML = bonusHtml + weeksHtml + `
+  body.innerHTML = statusLine + bonusHtml + weeksHtml + `
     <div class="card">
       <h2>Error history (${errors.length})</h2>
       <div style="overflow-x:auto"><table id="profile-errors-table"></table></div>
@@ -1003,7 +1282,7 @@ function openProfile(name){
   document.getElementById('profile-modal').style.display = 'flex';
 }
 
-function closeProfile(){ document.getElementById('profile-modal').style.display = 'none'; }
+function closeProfile(){ document.getElementById('profile-modal').style.display = 'none'; openProfileName = null; }
 
 document.addEventListener('click', (e) => {
   const techEl = e.target.closest('.tech-link[data-tech]');
@@ -1056,20 +1335,134 @@ function errorDetailHtml(e){
     </div>`;
 }
 
+let openErrorId = null;
+
 function openErrorDetail(errorId){
   const e = (DATA.Error_Log || []).find(r => r.Error_ID === errorId);
-  document.getElementById('error-title').textContent = errorId;
+  openErrorId = errorId;
+  document.getElementById('error-title').textContent = e ? `${errorId} — ${e.Technician_Name || ''}` : errorId;
   const body = document.getElementById('error-body');
   if (!e){
     body.innerHTML = `<div class="empty">Couldn't find this error — try Refresh.</div>`;
     document.getElementById('error-modal').style.display = 'flex';
     return;
   }
-  body.innerHTML = errorDetailHtml(e);
+  body.innerHTML = errorActionsHtml(e) + `<div class="card"><h2>Error details</h2>${errorDetailHtml(e)}</div>`;
   document.getElementById('error-modal').style.display = 'flex';
 }
 
-function closeErrorDetail(){ document.getElementById('error-modal').style.display = 'none'; }
+function closeErrorDetail(){ document.getElementById('error-modal').style.display = 'none'; openErrorId = null; }
+
+// Review + coaching actions shown at the top of the error pop-up, so a lead
+// can resolve an error (or log the coaching conversation) right from any
+// list it appears in — Pending Review, Error Log, a profile, a category.
+function errorActionsHtml(e){
+  if (!currentUser){
+    return `<div class="callout info"><b>Sign in</b> (top right) to confirm or remove this error, or to log the coaching conversation with ${esc(e.Technician_Name || 'the technician')}.</div>`;
+  }
+  const status = e.Confirmation_Status || '';
+  const d = parseFlexDate(e.Incident_Date);
+  const month = d ? d.toLocaleString('en-US', { month: 'long', year: 'numeric' }) : 'the incident month';
+  const coach = e['Coaching Status'] || '';
+  const coachOpts = ['', 'Pending Discussion', 'Discussed - Complete', 'No Action Needed'];
+  if (coach && !coachOpts.includes(coach)) coachOpts.push(coach);
+  return `
+  <div class="two-col">
+    <div class="card" style="margin-bottom:16px;">
+      <h2>Review decision</h2>
+      <div class="desc">Current status: ${statusBadge(status)}<br>
+        <b>Confirm</b> counts it against ${esc(e.Technician_Name)}'s bonus for ${esc(month)}.
+        <b>Remove</b> keeps the record for history but it no longer counts anywhere — the bonus summary only counts "${CONFIRMED_STATUS}".</div>
+      <div class="field"><label>Reviewer notes</label><textarea id="err-review-notes" placeholder="Why it was confirmed or removed…">${esc(e.Reviewer_Notes)}</textarea>
+        <div class="hint">Your name and today's date are added automatically.</div></div>
+      <div class="action-row">
+        <button type="button" class="btn-confirm" data-review="confirm" ${status === CONFIRMED_STATUS ? 'disabled' : ''}>✓ Confirm penalty</button>
+        <button type="button" class="btn-remove" data-review="remove" ${isRemoved(e) ? 'disabled' : ''}>✕ Remove — no impact</button>
+        ${!isPendingReview(e) ? `<button type="button" class="btn-neutral" data-review="pending">↺ Back to Pending</button>` : ''}
+      </div>
+      <div class="form-msg" id="err-review-msg" style="margin-top:8px;"></div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <h2>Log coaching / training</h2>
+      <div class="desc">Record the conversation with ${esc(e.Technician_Name)}. Saves to this error's Coaching Status, Prevention Plan and Lead Notes.</div>
+      <div class="field" style="margin-bottom:10px;"><label>Coaching status</label>
+        <select id="err-coach-status">${coachOpts.map(o => `<option value="${esc(o)}"${o === coach ? ' selected' : ''}>${o ? esc(o) : '— not set —'}</option>`).join('')}</select></div>
+      <div class="field" style="margin-bottom:10px;"><label>Tech prevention plan</label><textarea id="err-coach-plan" placeholder="What the tech will do differently…">${esc(e.Tech_Prevention_Plan)}</textarea></div>
+      <div class="field"><label>Lead coaching notes</label><textarea id="err-coach-notes" placeholder="Notes from the conversation…">${esc(e.Lead_Coaching_Notes)}</textarea></div>
+      <div class="action-row">
+        <button type="button" class="btn-primary" id="err-coach-save">Save coaching</button>
+        <button type="button" class="btn-neutral" id="err-coach-done" title="Sets status to Discussed - Complete and saves">Mark discussed &amp; save</button>
+      </div>
+      <div class="form-msg" id="err-coach-msg" style="margin-top:8px;"></div>
+    </div>
+  </div>`;
+}
+
+// Text written with USER_ENTERED is parsed like typing into a cell, so a
+// note that starts with = + - @ would turn into a formula. Prefix those.
+function safeCellText(v){ v = String(v ?? ''); return /^[=+\-@]/.test(v) ? "'" + v : v; }
+
+async function reviewError(action){
+  const id = openErrorId;
+  const msg = document.getElementById('err-review-msg');
+  const buttons = document.querySelectorAll('#error-body button[data-review]');
+  const status = { confirm: CONFIRMED_STATUS, remove: REMOVED_STATUS, pending: PENDING_STATUS }[action];
+  const impact = { confirm: 'TRUE', remove: 'FALSE', pending: '' }[action];
+  const verb = { confirm: 'Confirmed', remove: 'Removed', pending: 'Reopened' }[action];
+  let notes = (document.getElementById('err-review-notes').value || '').trim();
+  const stamp = `${verb} by ${currentUser.name || currentUser.email} on ${fmtDateUS(new Date())}`;
+  notes = notes ? `${notes}\n${stamp}` : stamp;
+  buttons.forEach(b => b.disabled = true);
+  msg.className = 'form-msg'; msg.textContent = 'Saving…';
+  try {
+    const rowNum = await sheetsFindRow('Error_Log', 'A', id);
+    if (rowNum < 0) throw new Error('Could not find this error in the sheet — try Refresh, then try again.');
+    await sheetsUpdateRange(`Error_Log!L${rowNum}:N${rowNum}`, [status, safeCellText(notes), impact]);
+    await loadAll();
+    if (openErrorId === id) openErrorDetail(id);
+    refreshOpenProfile();
+    showToast(`${id}: ${status}`);
+  } catch (err){
+    msg.className = 'form-msg error'; msg.textContent = err.message;
+    buttons.forEach(b => b.disabled = false);
+  }
+}
+
+async function saveCoachingFromModal(markDone){
+  const id = openErrorId;
+  const msg = document.getElementById('err-coach-msg');
+  const statusSel = document.getElementById('err-coach-status');
+  if (markDone) statusSel.value = 'Discussed - Complete';
+  const values = [statusSel.value, safeCellText(document.getElementById('err-coach-plan').value.trim()), safeCellText(document.getElementById('err-coach-notes').value.trim())];
+  const btns = [document.getElementById('err-coach-save'), document.getElementById('err-coach-done')];
+  btns.forEach(b => b.disabled = true);
+  msg.className = 'form-msg'; msg.textContent = 'Saving…';
+  try {
+    const rowNum = await sheetsFindRow('Error_Log', 'A', id);
+    if (rowNum < 0) throw new Error('Could not find this error in the sheet — try Refresh, then try again.');
+    await sheetsUpdateRange(`Error_Log!O${rowNum}:Q${rowNum}`, values);
+    await loadAll();
+    if (openErrorId === id) openErrorDetail(id);
+    refreshOpenProfile();
+    showToast(`Coaching saved for ${id}`);
+  } catch (err){
+    msg.className = 'form-msg error'; msg.textContent = err.message;
+    btns.forEach(b => b.disabled = false);
+  }
+}
+
+document.getElementById('error-body').addEventListener('click', ev => {
+  const rb = ev.target.closest('button[data-review]');
+  if (rb){ reviewError(rb.dataset.review); return; }
+  if (ev.target.closest('#err-coach-save')){ saveCoachingFromModal(false); return; }
+  if (ev.target.closest('#err-coach-done')){ saveCoachingFromModal(true); return; }
+});
+
+// If a technician profile is open underneath, redraw it with fresh data.
+let openProfileName = null;
+function refreshOpenProfile(){
+  if (openProfileName && document.getElementById('profile-modal').style.display === 'flex') openProfile(openProfileName);
+}
 
 // Shows the selected error right next to the Log Coaching form, so a lead
 // can pull it up and walk through it with the tech while filling out the form.
@@ -1087,7 +1480,7 @@ function renderLogCoachingErrorDetail(errorId){
 // ---------- Category detail modal ----------
 function categoryTechBreakdown(category){
   const counts = {};
-  (DATA.Error_Log || []).filter(e => (e.Standard_Category || 'Uncategorized') === category).forEach(e => {
+  errorsInRange(currentOverviewRange()).filter(e => (e.Standard_Category || 'Uncategorized') === category).forEach(e => {
     const n = e.Technician_Name || 'Unknown';
     counts[n] = (counts[n] || 0) + 1;
   });
@@ -1095,8 +1488,9 @@ function categoryTechBreakdown(category){
 }
 
 function openCategoryDetail(category){
-  const rows = (DATA.Error_Log || []).filter(e => (e.Standard_Category || 'Uncategorized') === category).reverse();
-  document.getElementById('category-title').textContent = category;
+  const r = currentOverviewRange();
+  const rows = errorsInRange(r).filter(e => (e.Standard_Category || 'Uncategorized') === category).reverse();
+  document.getElementById('category-title').textContent = `${category} — ${r.label}`;
   const body = document.getElementById('category-body');
   body.innerHTML = `
     <div class="card">
@@ -1127,18 +1521,41 @@ function openCategoryDetail(category){
 function closeCategoryDetail(){ document.getElementById('category-modal').style.display = 'none'; }
 
 // ---------- OVERVIEW ----------
+// Period toggle: This month / Last month / Last 90 days / All time. Error
+// counts, categories, scores and the recent list follow the period (by
+// incident date / score date). Pending review is "open right now", and
+// attendance + bonus eligibility come from the sheet's own rolling/monthly
+// figures, so those three cards say so in their notes.
+let overviewPeriod = prefGet('overviewPeriod', 'month');
+function currentOverviewRange(){ return periodRange(overviewPeriod); }
+
+function errorsInRange(r){
+  return (DATA.Error_Log || []).filter(e => !isRemoved(e) && inRange(parseFlexDate(e.Incident_Date), r));
+}
+
 function renderOverview(){
-  const errors = DATA.Error_Log || [];
+  const r = currentOverviewRange();
+  document.querySelectorAll('#overview-period button').forEach(b => b.classList.toggle('active', b.dataset.period === r.key));
+  document.getElementById('overview-period-range').textContent = r.long;
+  document.getElementById('category-bars-title').textContent = `Error categories — ${r.label.toLowerCase()}`;
+  document.getElementById('score-bars-title').textContent = `Avg. daily score by technician — ${r.label.toLowerCase()}`;
+
+  const allErrors = DATA.Error_Log || [];
+  const errors = errorsInRange(r);
+  const prior = priorRange(r);
+  const priorErrors = prior ? errorsInRange(prior) : null;
+
   // Only technicians marked Active (Technicians tab, column F) count toward
   // rolling attendance and score averages — departed/inactive staff shouldn't
   // drag down or otherwise skew current performance numbers.
   const techs = (DATA.Technicians || []).filter(t => t.Status === 'Active');
-  const activeNames = new Set(techs.map(t => t.Name));
+  const activeKeys = new Set(techs.map(t => nameKey(t.Name)));
   const bonus = DATA.Monthly_Bonus_Summary || [];
   const scores = DATA.Tech_Scores || [];
 
-  const pendingReview = errors.filter(e => (e.Confirmation_Status||'').toLowerCase() === 'pending review').length;
-  const pendingDiscussion = errors.filter(e => (e['Coaching Status']||'').toLowerCase().includes('pending')).length;
+  const pendingReview = allErrors.filter(isPendingReview).length;
+  const pendingDiscussion = allErrors.filter(e => needsCoaching(e) && !isPendingReview(e)).length;
+  const confirmed = errors.filter(e => (e.Confirmation_Status || '') === CONFIRMED_STATUS).length;
   const critical = errors.filter(e => (e.Error_Classification||'').toLowerCase().includes('critical')).length;
   const avgAttendance = techs.length ? (techs.reduce((s,t) => s + (parseFloat(t.Rolling_Attendance_Pct)||0), 0) / techs.length * 100) : null;
 
@@ -1151,17 +1568,37 @@ function renderOverview(){
     });
   }
 
+  // Team score for the period (hours-weighted, active techs only).
+  let tHours = 0, tOut = 0;
+  scores.forEach(s => {
+    if (!activeKeys.has(nameKey(s.Name))) return;
+    if (!inRange(parseFlexDate(s.Date), r)) return;
+    tHours += parseFloat(String(s.Hours).replace(/,/g,'')) || 0;
+    tOut += parseFloat(String(s.Output).replace(/,/g,'')) || 0;
+  });
+
+  function delta(cur, prev){
+    if (prev === null || prev === undefined) return '';
+    const d = cur - prev;
+    if (d === 0) return `<span class="delta" style="color:var(--muted)">±0</span>`;
+    return `<span class="delta ${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d)}</span>`;
+  }
+  const priorNote = r.key === 'month' ? 'same point last month' : r.key === 'lastmonth' ? 'the month before' : 'prior 90 days';
+
   const kpis = [
-    { label: 'Total errors logged', value: errors.length, note: 'All time, Error_Log' },
-    { label: 'Pending review', value: pendingReview, note: pendingDiscussion ? `+${pendingDiscussion} pending coaching discussion` : 'Awaiting confirmation' },
-    { label: 'Critical violations', value: critical, note: 'All time' },
-    { label: 'Avg. rolling attendance', value: avgAttendance !== null ? avgAttendance.toFixed(1) + '%' : '—', note: `${techs.length} active technician${techs.length === 1 ? '' : 's'}` },
-    { label: `Bonus eligible (${latestPeriod || 'latest month'})`, value: eligible, note: `${forfeited} forfeited` },
+    { label: 'Errors logged', value: errors.length, html: delta(errors.length, priorErrors ? priorErrors.length : null),
+      note: priorErrors ? `${priorErrors.length} in ${priorNote}` : 'All time, excl. removed', go: 'errorlog' },
+    { label: 'Confirmed penalties', value: confirmed, note: `${errors.length - confirmed} not (yet) confirmed`, go: 'errorlog' },
+    { label: 'Critical violations', value: critical, html: delta(critical, priorErrors ? priorErrors.filter(e => (e.Error_Classification||'').toLowerCase().includes('critical')).length : null), note: r.label },
+    { label: 'Team score', value: tHours > 0 ? fmtPct(tOut / tHours) : '—', note: tHours > 0 ? `${fmtHours(tHours)} hrs logged · active techs` : 'No score data in this period' },
+    { label: 'Pending review', value: pendingReview, note: pendingDiscussion ? `Open now · +${pendingDiscussion} awaiting coaching` : 'Open now, any date', go: 'pending' },
+    { label: 'Avg. rolling attendance', value: avgAttendance !== null ? avgAttendance.toFixed(1) + '%' : '—', note: `Rolling 90 days · ${techs.length} active`, go: 'attendance' },
+    { label: `Bonus eligible (${latestPeriod || 'latest month'})`, value: eligible, note: `${forfeited} forfeited · from bonus summary`, go: 'bonus' },
   ];
   document.getElementById('kpi-row').innerHTML = kpis.map(k => `
-    <div class="kpi">
+    <div class="kpi${k.go ? ' clickable' : ''}"${k.go ? ` data-go="${k.go}" title="Open ${k.go}"` : ''}>
       <div class="label">${esc(k.label)}</div>
-      <div class="value">${esc(k.value)}</div>
+      <div class="value">${esc(k.value)}${k.html || ''}</div>
       <div class="note">${esc(k.note)}</div>
     </div>`).join('');
 
@@ -1186,26 +1623,30 @@ function renderOverview(){
       <div class="bar-track"><div class="bar-fill" style="width:${(count/maxCat*100).toFixed(0)}%;background:#2f6feb;"></div></div>
       <div class="val">${count}</div>
     </div>`;
-  }).join('') : '<div class="empty">No error data yet.</div>';
+  }).join('') : `<div class="empty">No errors logged ${r.key === 'all' ? 'yet' : 'in this period'}.</div>`;
 
-  // Avg score per tech (active technicians only)
+  // Avg score per tech in the period (active technicians only)
   const scoreSums = {};
+  const displayName = {};
   scores.forEach(s => {
     const v = parseScore(s.Score);
-    if (v === null || !s.Name || !activeNames.has(s.Name)) return;
-    if (!scoreSums[s.Name]) scoreSums[s.Name] = { sum: 0, n: 0 };
-    scoreSums[s.Name].sum += v; scoreSums[s.Name].n += 1;
+    const k = nameKey(s.Name);
+    if (v === null || !s.Name || !activeKeys.has(k)) return;
+    if (!inRange(parseFlexDate(s.Date), r)) return;
+    displayName[k] = displayName[k] || (techs.find(t => nameKey(t.Name) === k) || {}).Name || s.Name;
+    if (!scoreSums[k]) scoreSums[k] = { sum: 0, n: 0 };
+    scoreSums[k].sum += v; scoreSums[k].n += 1;
   });
-  const scoreAvgs = Object.entries(scoreSums).map(([name,d]) => [name, d.sum/d.n]).sort((a,b) => b[1]-a[1]);
+  const scoreAvgs = Object.entries(scoreSums).map(([k,d]) => [displayName[k], d.sum/d.n, d.n]).sort((a,b) => b[1]-a[1]);
   const maxScore = Math.max(1.5, ...scoreAvgs.map(e => e[1]));
-  document.getElementById('score-bars').innerHTML = scoreAvgs.length ? scoreAvgs.map(([name,avg]) => `
-    <div class="bar-row">
+  document.getElementById('score-bars').innerHTML = scoreAvgs.length ? scoreAvgs.map(([name,avg,n]) => `
+    <div class="bar-row" title="${n} day${n === 1 ? '' : 's'} logged">
       <div class="name">${techLink(name)}</div>
       <div class="bar-track"><div class="bar-fill" style="width:${(avg/maxScore*100).toFixed(0)}%;background:${avg>=1?'#1a7f37':'#a15c00'};"></div></div>
       <div class="val">${fmtPct(avg)}</div>
-    </div>`).join('') : '<div class="empty">No score data yet.</div>';
+    </div>`).join('') : '<div class="empty">No score data in this period.</div>';
 
-  // Recent errors table
+  // Recent errors table (most recently logged, within the period)
   const recent = [...errors].reverse().slice(0,8);
   buildTable(document.getElementById('recent-errors-table'),
     [{label:'Date'},{label:'Technician'},{label:'Category'},{label:'Description'},{label:'Status'}],
@@ -1219,70 +1660,146 @@ function renderOverview(){
     </tr>`);
 }
 
+document.getElementById('overview-period').addEventListener('click', e => {
+  const b = e.target.closest('button[data-period]');
+  if (!b) return;
+  overviewPeriod = b.dataset.period;
+  prefSet('overviewPeriod', overviewPeriod);
+  renderOverview();
+});
+document.getElementById('kpi-row').addEventListener('click', e => {
+  const k = e.target.closest('.kpi[data-go]');
+  if (k) switchView(k.dataset.go);
+});
+
 // ---------- PENDING ----------
 function renderPending(){
   const errors = DATA.Error_Log || [];
-  const pending = errors.filter(e =>
-    (e.Confirmation_Status||'').toLowerCase() === 'pending review' ||
-    (e['Coaching Status']||'').toLowerCase().includes('pending')
-  );
-  buildTable(document.getElementById('pending-table'),
-    [{label:'Error ID'},{label:'Incident Date'},{label:'Technician'},{label:'Category'},{label:'Description'},{label:'Photo'},{label:'Confirmation'},{label:'Coaching'}],
-    pending,
+  const type = document.getElementById('pending-type-filter').value;
+  const pending = errors.filter(e => {
+    const r = isPendingReview(e), c = needsCoaching(e);
+    if (type === 'review') return r;
+    if (type === 'coaching') return c && !r;
+    return r || c;
+  }).reverse();
+  const nReview = errors.filter(isPendingReview).length;
+  const nCoach = errors.filter(e => needsCoaching(e) && !isPendingReview(e)).length;
+  const sel = document.getElementById('pending-type-filter');
+  sel.options[0].textContent = `All pending items (${nReview + nCoach})`;
+  sel.options[1].textContent = `Needs review decision (${nReview})`;
+  sel.options[2].textContent = `Needs coaching only (${nCoach})`;
+  const cols = [
+    {label:'Error ID'},
+    {label:'Incident Date', key:'date', get: e => parseFlexDate(e.Incident_Date)},
+    {label:'Technician', key:'tech', get: e => e.Technician_Name},
+    {label:'Classification', key:'class', get: e => e.Error_Classification},
+    {label:'Category', key:'cat', get: e => e.Standard_Category},
+    {label:'Description'},
+    {label:'Photo'},
+    {label:'Confirmation', key:'conf', get: e => e.Confirmation_Status},
+    {label:'Coaching', key:'coach', get: e => e['Coaching Status']},
+    {label:''}
+  ];
+  buildSortableTable(document.getElementById('pending-table'), cols, pending,
     e => `<tr class="clickable-row" data-error-id="${esc(e.Error_ID)}">
       <td>${esc(e.Error_ID)}</td>
       <td>${esc(e.Incident_Date)}</td>
       <td>${techLink(e.Technician_Name)}</td>
+      <td>${classificationBadge(e.Error_Classification)}</td>
       <td>${esc(e.Standard_Category)}</td>
       <td>${esc(e.Detailed_Description)}</td>
       <td>${sampleImageCell(e.Sample_Image)}</td>
       <td>${statusBadge(e.Confirmation_Status)}</td>
       <td>${e['Coaching Status'] ? statusBadge(e['Coaching Status']) : '—'}</td>
+      <td><button type="button" class="btn-sm">${isPendingReview(e) ? 'Review →' : 'Coach →'}</button></td>
     </tr>`);
 }
+document.getElementById('pending-type-filter').addEventListener('change', renderPending);
 
 // ---------- ERROR LOG ----------
+// Filters: search, classification, category (narrows to the chosen
+// classification), confirmation status, technician. Every column header
+// with an arrow is sortable. Filter options are rebuilt on every load so
+// newly-used values show up after a Refresh.
+function fillSelect(sel, values, allLabel){
+  const keep = sel.value;
+  sel.innerHTML = `<option value="">${esc(allLabel)}</option>` +
+    values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+  sel.value = values.includes(keep) ? keep : '';
+}
+function uniqSorted(arr){ return [...new Set(arr.filter(Boolean))].sort((a,b) => a.localeCompare(b)); }
+
 function renderErrorLog(){
   const errors = DATA.Error_Log || [];
+  const classSel = document.getElementById('errorlog-class-filter');
+  const catSel = document.getElementById('errorlog-cat-filter');
   const statusSel = document.getElementById('errorlog-status-filter');
   const techSel = document.getElementById('errorlog-tech-filter');
-  // Rebuild the filter options on every load (not just the first) so new
-  // technicians/statuses added since the page opened appear after a Refresh
-  // or after logging an error. Keep whatever the user had selected.
-  const fill = (sel, values, allLabel) => {
-    const keep = sel.value;
-    sel.innerHTML = `<option value="">${allLabel}</option>` +
-      values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
-    sel.value = values.includes(keep) ? keep : '';
-  };
-  fill(statusSel, [...new Set(errors.map(e => e.Confirmation_Status).filter(Boolean))].sort(), statusSel.options[0] ? statusSel.options[0].textContent : 'All statuses');
-  fill(techSel, [...new Set(errors.map(e => e.Technician_Name).filter(Boolean))].sort(), 'All technicians');
-  if (!statusSel.onchange){
+  fillSelect(classSel, uniqSorted(errors.map(e => e.Error_Classification)), 'All classifications');
+  refreshErrorLogCategoryOptions();
+  fillSelect(statusSel, uniqSorted(errors.map(e => e.Confirmation_Status)), 'All statuses');
+  fillSelect(techSel, uniqSorted(errors.map(e => e.Technician_Name)), 'All technicians');
+  if (!classSel.onchange){
+    classSel.onchange = () => { refreshErrorLogCategoryOptions(); renderErrorLogTable(); };
+    catSel.onchange = renderErrorLogTable;
     statusSel.onchange = renderErrorLogTable;
     techSel.onchange = renderErrorLogTable;
     document.getElementById('errorlog-search').oninput = renderErrorLogTable;
+    document.getElementById('errorlog-clear').onclick = () => {
+      [classSel, catSel, statusSel, techSel].forEach(s => s.value = '');
+      document.getElementById('errorlog-search').value = '';
+      refreshErrorLogCategoryOptions();
+      renderErrorLogTable();
+    };
   }
   renderErrorLogTable();
+}
+
+// Category list follows the chosen classification (same pairing as the Log
+// Error form), plus any other categories actually used with it in the sheet.
+function refreshErrorLogCategoryOptions(){
+  const errors = DATA.Error_Log || [];
+  const cls = document.getElementById('errorlog-class-filter').value;
+  const used = errors.filter(e => !cls || e.Error_Classification === cls).map(e => e.Standard_Category);
+  fillSelect(document.getElementById('errorlog-cat-filter'), uniqSorted(used), cls ? `All ${cls} categories` : 'All categories');
 }
 
 function renderErrorLogTable(){
   const errors = DATA.Error_Log || [];
   const q = (document.getElementById('errorlog-search').value || '').toLowerCase();
+  const classF = document.getElementById('errorlog-class-filter').value;
+  const catF = document.getElementById('errorlog-cat-filter').value;
   const statusF = document.getElementById('errorlog-status-filter').value;
   const techF = document.getElementById('errorlog-tech-filter').value;
   const filtered = errors.filter(e => {
+    if (classF && e.Error_Classification !== classF) return false;
+    if (catF && e.Standard_Category !== catF) return false;
     if (statusF && e.Confirmation_Status !== statusF) return false;
     if (techF && e.Technician_Name !== techF) return false;
     if (q){
-      const hay = `${e.Technician_Name} ${e['Order ID']} ${e.Detailed_Description} ${e.Standard_Category}`.toLowerCase();
+      const hay = `${e.Technician_Name} ${e['Order ID']} ${e.Detailed_Description} ${e.Standard_Category} ${e.Error_Classification} ${e.Error_ID}`.toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
   }).reverse();
-  buildTable(document.getElementById('errorlog-table'),
-    [{label:'Error ID'},{label:'Incident Date'},{label:'Order ID'},{label:'Technician'},{label:'Classification'},{label:'Category'},{label:'Description'},{label:'Photo'},{label:'Status'}],
-    filtered,
-    e => `<tr class="clickable-row" data-error-id="${esc(e.Error_ID)}">
+  const anyFilter = q || classF || catF || statusF || techF;
+  document.getElementById('errorlog-count').textContent = anyFilter
+    ? `${filtered.length} of ${errors.length} errors match`
+    : `${errors.length} errors · newest logged first (click a header to sort)`;
+  const cols = [
+    {label:'Error ID', key:'id', get: e => e.Error_ID},
+    {label:'Incident Date', key:'date', get: e => parseFlexDate(e.Incident_Date)},
+    {label:'Order ID', key:'order', get: e => e['Order ID']},
+    {label:'Technician', key:'tech', get: e => e.Technician_Name},
+    {label:'Classification', key:'class', get: e => e.Error_Classification},
+    {label:'Category', key:'cat', get: e => e.Standard_Category},
+    {label:'Description'},
+    {label:'Photo'},
+    {label:'Status', key:'status', get: e => e.Confirmation_Status},
+    {label:'Coaching', key:'coach', get: e => e['Coaching Status']}
+  ];
+  buildSortableTable(document.getElementById('errorlog-table'), cols, filtered,
+    e => `<tr class="clickable-row${isRemoved(e) ? ' row-removed' : ''}" data-error-id="${esc(e.Error_ID)}">
       <td>${esc(e.Error_ID)}</td>
       <td>${esc(e.Incident_Date)}</td>
       <td>${esc(e['Order ID'])}</td>
@@ -1292,31 +1809,208 @@ function renderErrorLogTable(){
       <td>${esc(e.Detailed_Description)}</td>
       <td>${sampleImageCell(e.Sample_Image)}</td>
       <td>${statusBadge(e.Confirmation_Status)}</td>
+      <td>${e['Coaching Status'] ? statusBadge(e['Coaching Status']) : '—'}</td>
     </tr>`);
 }
 
 // ---------- BONUS ----------
-function renderBonus(){
+// Hours worked = sum of Tech_Scores hours for the bonus month (the same
+// SUMIFS the sheet's Base Bonus formula uses). Prior Month Score comes from
+// the sheet. Inactive technicians are hidden unless the checkbox is on,
+// but anyone with hours that month is called out so payroll isn't missed.
+function bonusPeriodInfo(){
   const allBonus = DATA.Monthly_Bonus_Summary || [];
   const period = allBonus.length ? allBonus[0]['Month/Year'] : null;
-  document.getElementById('bonus-period').textContent = period ? `Period: ${period}` : 'No bonus data available yet';
-  // Only show active technicians (Technicians tab, column F) here.
-  const activeNames = new Set((DATA.Technicians || []).filter(t => t.Status === 'Active').map(t => t.Name));
-  const bonus = allBonus.filter(b => activeNames.has(b.Technician));
-  buildTable(document.getElementById('bonus-table'),
-    [{label:'Technician'},{label:'Clerical Errors'},{label:'Order Errors'},{label:'Critical Violations'},{label:'Attendance %'},{label:'Status'},{label:'Base Bonus'},{label:'Adjusted Final Bonus'}],
-    bonus,
+  const r = bonusPeriodRange(period) || periodRange('lastmonth');
+  const label = r.start.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  return { period, r, label };
+}
+
+function bonusRowsForDisplay(includeInactive){
+  const { r } = bonusPeriodInfo();
+  const techByKey = {};
+  (DATA.Technicians || []).forEach(t => techByKey[nameKey(t.Name)] = t);
+  return (DATA.Monthly_Bonus_Summary || []).filter(b => b.Technician).map(b => {
+    const t = techByKey[nameKey(b.Technician)];
+    const tot = scoreTotals(b.Technician, r);
+    return Object.assign({}, b, {
+      __active: !!(t && t.Status === 'Active'),
+      __hours: tot.hours,
+      __score: parseScore(b['Prior Month Score']),
+      __base: parseFloat(String(b['Base Bonus Amount']).replace(/[^0-9.-]/g, '')) || 0,
+      __final: parseFloat(String(b['Adjusted Final Bonus']).replace(/[^0-9.-]/g, '')) || 0
+    });
+  }).filter(b => includeInactive || b.__active);
+}
+
+// Technicians with no Monthly_Bonus_Summary row who are Active or worked
+// during the bonus month — the sheet calculates nothing for them.
+function bonusMissingTechs(){
+  const have = new Set((DATA.Monthly_Bonus_Summary || []).map(b => nameKey(b.Technician)));
+  const { r } = bonusPeriodInfo();
+  return (DATA.Technicians || [])
+    .filter(t => t.Name && !have.has(nameKey(t.Name)))
+    .map(t => ({ name: t.Name, status: t.Status, hours: scoreTotals(t.Name, r).hours }))
+    .filter(x => x.status === 'Active' || x.hours > 0)
+    .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
+}
+
+function renderBonus(){
+  const { period, label } = bonusPeriodInfo();
+  const showInactive = document.getElementById('bonus-show-inactive').checked;
+  document.getElementById('bonus-period').textContent = period
+    ? `Bonus period ${period} (${label}). Hours worked are summed from Tech_Scores for that month; everything else comes from the Monthly_Bonus_Summary tab.`
+    : 'No bonus data available yet';
+
+  const rows = bonusRowsForDisplay(showInactive);
+  const hiddenInactive = bonusRowsForDisplay(true).filter(b => !b.__active);
+  const hiddenWithHours = hiddenInactive.filter(b => b.__hours > 0);
+  document.getElementById('bonus-inactive-note').textContent = showInactive ? '' :
+    (hiddenWithHours.length ? `${hiddenWithHours.length} inactive with hours in ${label} hidden (${hiddenWithHours.map(b => b.Technician).join(', ')})` : '');
+
+  // Missing-row warning
+  const missing = bonusMissingTechs();
+  const box = document.getElementById('bonus-missing');
+  box.innerHTML = missing.length ? `
+    <div class="callout">
+      <b>${missing.length} technician${missing.length === 1 ? ' has' : 's have'} no row on the Monthly_Bonus_Summary tab</b>, so the sheet isn't calculating a bonus for ${missing.length === 1 ? 'them' : 'them'}:
+      ${missing.map(m => `${techLink(m.name)} <span class="muted">(${fmtHours(m.hours)} hrs in ${esc(label)}${m.status !== 'Active' ? ', inactive' : ''})</span>`).join(' · ')}
+      ${(() => { const b = brokenAttendanceTechs().filter(t => missing.some(m => nameKey(m.name) === nameKey(t.Name))); return b.length
+        ? `<div style="margin-top:6px;">⚠ ${b.map(t => esc(t.Name)).join(', ')} also ${b.length === 1 ? 'has' : 'have'} a broken attendance formula (0%) — adding the rows below repairs it too, otherwise the sheet would mark them forfeited.</div>` : ''; })()}
+      <div class="action-row" style="margin-top:10px;">
+        ${currentUser
+          ? `<button type="button" class="btn-primary" id="bonus-add-missing-btn" style="padding:8px 14px;">Add missing rows to the sheet</button>
+             <span class="muted" style="font-size:12.5px;">Adds each name to the bottom of Monthly_Bonus_Summary and copies the bonus formulas from row 2.</span>`
+          : `<span class="muted">Sign in (top right) to add them with one click.</span>`}
+        <span class="form-msg" id="bonus-add-missing-msg"></span>
+      </div>
+    </div>` : '';
+
+  const cols = [
+    {label:'Technician', key:'tech', get: b => b.Technician},
+    {label:'Hours Worked', key:'hours', get: b => b.__hours},
+    {label:'Prior Mo. Score', key:'score', get: b => b.__score},
+    {label:'Clerical', key:'cler', get: b => parseFloat(b['Clerical Errors'])},
+    {label:'Order', key:'order', get: b => parseFloat(b['Order Errors'])},
+    {label:'Critical', key:'crit', get: b => parseFloat(b['Critical Violations'])},
+    {label:'Attend.', key:'att', get: b => parseFloat(b['Rolling Attendance %'])},
+    {label:'Status', key:'status', get: b => b['Final Bonus Status']},
+    {label:'Base Bonus', key:'base', get: b => b.__base},
+    {label:'Final Bonus', key:'final', get: b => b.__final}
+  ];
+  const tot = rows.reduce((a, b) => ({ h: a.h + b.__hours, base: a.base + b.__base, fin: a.fin + b.__final }), { h: 0, base: 0, fin: 0 });
+  const footer = rows.length ? `<tfoot><tr style="font-weight:700;">
+      <td>Total (${rows.length})</td><td>${fmtHours(tot.h)}</td><td></td><td></td><td></td><td></td><td></td><td></td>
+      <td>${fmtMoney(tot.base)}</td><td>${fmtMoney(tot.fin)}</td></tr></tfoot>` : '';
+  buildSortableTable(document.getElementById('bonus-table'), cols, rows,
     b => `<tr>
-      <td>${techLink(b.Technician)}</td>
+      <td>${techLink(b.Technician)}${b.__active ? '' : ' <span class="badge grey">Inactive</span>'}</td>
+      <td>${fmtHours(b.__hours)}</td>
+      <td>${fmtPct(b.__score)}</td>
       <td>${esc(b['Clerical Errors'])}</td>
       <td>${esc(b['Order Errors'])}</td>
       <td>${esc(b['Critical Violations'])}</td>
       <td>${esc(b['Rolling Attendance %'])}</td>
       <td>${statusBadge(b['Final Bonus Status'])}</td>
       <td>${fmtMoney(b['Base Bonus Amount'])}</td>
-      <td>${fmtMoney(b['Adjusted Final Bonus'])}</td>
-    </tr>`);
+      <td><b>${fmtMoney(b['Adjusted Final Bonus'])}</b></td>
+    </tr>`, { key: 'tech', dir: 1 }, footer);
 }
+
+// Rows in the order currently shown on screen (respects the sort).
+function bonusRowsInDisplayOrder(){
+  const rows = bonusRowsForDisplay(document.getElementById('bonus-show-inactive').checked);
+  const st = SORT_STATE['bonus-table'] || {};
+  const getters = { tech: b => b.Technician, hours: b => b.__hours, score: b => b.__score, base: b => b.__base, final: b => b.__final, status: b => b['Final Bonus Status'],
+    cler: b => parseFloat(b['Clerical Errors']) || 0, order: b => parseFloat(b['Order Errors']) || 0, crit: b => parseFloat(b['Critical Violations']) || 0, att: b => parseFloat(b['Rolling Attendance %']) || 0 };
+  const g = getters[st.key];
+  return g ? rows.slice().sort((a, b) => (sortCompare(g(a) ?? -1, g(b) ?? -1) * (st.dir || 1))) : rows;
+}
+
+function csvCell(v){ v = String(v ?? ''); return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v; }
+
+function exportBonusCsv(){
+  const { period, label } = bonusPeriodInfo();
+  const rows = bonusRowsInDisplayOrder();
+  const header = ['Technician','Employee Status','Bonus Period','Hours Worked','Prior Month Score','Clerical Errors','Order Errors','Critical Violations','Disciplinary Warnings','Rolling Attendance %','Final Bonus Status','Base Bonus','Adjusted Final Bonus'];
+  const money = n => (Math.round(n * 100) / 100).toFixed(2);
+  const lines = [header];
+  let h = 0, base = 0, fin = 0;
+  rows.forEach(b => {
+    h += b.__hours; base += b.__base; fin += b.__final;
+    lines.push([b.Technician, b.__active ? 'Active' : 'Inactive', period, (Math.round(b.__hours * 100) / 100), b.__score === null ? '' : (b.__score * 100).toFixed(1) + '%',
+      b['Clerical Errors'], b['Order Errors'], b['Critical Violations'], b['Disciplinary Warnings'], b['Rolling Attendance %'],
+      b['Final Bonus Status'], money(b.__base), money(b.__final)]);
+  });
+  lines.push(['TOTAL', '', period, Math.round(h * 100) / 100, '', '', '', '', '', '', '', money(base), money(fin)]);
+  const missing = bonusMissingTechs();
+  if (missing.length){
+    lines.push([]);
+    lines.push([`NOTE: no bonus calculated for ${missing.map(m => m.name).join('; ')} (not on Monthly_Bonus_Summary)`]);
+  }
+  lines.push([`Generated ${new Date().toLocaleString()} from the Scan Tech Error & Bonus Tracker`]);
+  const csv = lines.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `scan-tech-bonus-report-${String(period || label).replace(/\W+/g, '-')}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+function printBonusReport(){
+  const { period, label } = bonusPeriodInfo();
+  const rows = bonusRowsInDisplayOrder();
+  const tot = rows.reduce((a, b) => ({ h: a.h + b.__hours, base: a.base + b.__base, fin: a.fin + b.__final }), { h: 0, base: 0, fin: 0 });
+  const missing = bonusMissingTechs();
+  const w = window.open('', '_blank');
+  if (!w){ showToast('Pop-up blocked — allow pop-ups for this site to print.'); return; }
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Scan Tech Bonus Report ${esc(period || '')}</title>
+    <style>body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;margin:28px;}h1{font-size:18px;margin:0 0 4px;}
+    .sub{color:#555;font-size:12px;margin-bottom:16px;}table{border-collapse:collapse;width:100%;font-size:12px;}
+    th,td{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left;}th{font-size:10.5px;text-transform:uppercase;color:#555;}
+    td.n,th.n{text-align:right;}tfoot td{font-weight:700;border-top:2px solid #333;}.note{margin-top:14px;font-size:12px;color:#7a4a00;}</style></head><body>
+    <h1>Scan Tech Bonus Report — ${esc(label)}</h1>
+    <div class="sub">Bonus period ${esc(period || '')} · ${rows.length} technicians · generated ${esc(new Date().toLocaleString())}</div>
+    <table><thead><tr><th>Technician</th><th class="n">Hours</th><th class="n">Prior Mo. Score</th><th class="n">Clerical</th><th class="n">Order</th><th class="n">Critical</th><th class="n">Attendance</th><th>Status</th><th class="n">Base</th><th class="n">Final Bonus</th></tr></thead>
+    <tbody>${rows.map(b => `<tr><td>${esc(b.Technician)}${b.__active ? '' : ' (inactive)'}</td><td class="n">${fmtHours(b.__hours)}</td><td class="n">${fmtPct(b.__score)}</td>
+      <td class="n">${esc(b['Clerical Errors'])}</td><td class="n">${esc(b['Order Errors'])}</td><td class="n">${esc(b['Critical Violations'])}</td><td class="n">${esc(b['Rolling Attendance %'])}</td>
+      <td>${esc(b['Final Bonus Status'])}</td><td class="n">${fmtMoney(b['Base Bonus Amount'])}</td><td class="n">${fmtMoney(b['Adjusted Final Bonus'])}</td></tr>`).join('')}</tbody>
+    <tfoot><tr><td>Total</td><td class="n">${fmtHours(tot.h)}</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="n">${fmtMoney(tot.base)}</td><td class="n">${fmtMoney(tot.fin)}</td></tr></tfoot></table>
+    ${missing.length ? `<div class="note">Not included — no bonus summary row: ${missing.map(m => esc(m.name)).join(', ')}</div>` : ''}
+    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
+}
+
+document.getElementById('bonus-show-inactive').addEventListener('change', renderBonus);
+document.getElementById('bonus-export-btn').addEventListener('click', exportBonusCsv);
+document.getElementById('bonus-print-btn').addEventListener('click', printBonusReport);
+
+async function addMissingBonusRows(names, msgEl, btn){
+  if (btn) btn.disabled = true;
+  if (msgEl){ msgEl.className = 'form-msg'; msgEl.textContent = 'Adding…'; }
+  try {
+    const broken = brokenAttendanceTechs().filter(t => names.some(n => nameKey(n) === nameKey(t.Name))).map(t => t.Name);
+    if (broken.length) await repairTechFormulas(broken);
+    const added = await addBonusSummaryRows(names);
+    await loadAll();
+    refreshOpenProfile();
+    showToast(added.length ? `Added ${added.join(', ')} to Monthly_Bonus_Summary` : 'Everyone already has a row');
+  } catch (err){
+    if (msgEl){ msgEl.className = 'form-msg error'; msgEl.textContent = err.message; }
+    else showToast(err.message);
+    if (btn) btn.disabled = false;
+  }
+}
+document.getElementById('bonus-missing').addEventListener('click', e => {
+  if (e.target.id === 'bonus-add-missing-btn'){
+    addMissingBonusRows(bonusMissingTechs().map(m => m.name), document.getElementById('bonus-add-missing-msg'), e.target);
+  }
+});
+document.getElementById('profile-body').addEventListener('click', e => {
+  const b = e.target.closest('button[data-add-bonus-row]');
+  if (b) addMissingBonusRows([b.dataset.addBonusRow], null, b);
+});
 
 // ---------- ATTENDANCE ----------
 function renderAttendance(){
@@ -1360,6 +2054,287 @@ function renderAttendance(){
     </tr>`);
 }
 
+// ---------- STAFFING ----------
+// Technicians tab as a sortable roster with recent performance, plus
+// add-technician and Active/Inactive switching for signed-in leads.
+let staffingAddOpen = false;
+
+function renderStaffing(){
+  const techs = DATA.Technicians || [];
+  const now = new Date();
+  const last30 = { start: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29), end: endOfDay(now) };
+  const last90 = { start: new Date(now.getFullYear(), now.getMonth(), now.getDate() - 89), end: endOfDay(now) };
+  const bonusKeys = new Set((DATA.Monthly_Bonus_Summary || []).map(b => nameKey(b.Technician)));
+  const errByKey = {};
+  (DATA.Error_Log || []).forEach(e => {
+    if (isRemoved(e) || !inRange(parseFlexDate(e.Incident_Date), last90)) return;
+    const k = nameKey(e.Technician_Name);
+    errByKey[k] = (errByKey[k] || 0) + 1;
+  });
+
+  const rows = techs.filter(t => t.Name).map(t => {
+    const hire = parseFlexDate(t.Hire_Date);
+    const tot30 = scoreTotals(t.Name, last30);
+    const allTot = scoreTotals(t.Name, null);
+    const months = hire ? monthsBetweenDates(hire, now) : null;
+    return Object.assign({}, t, {
+      __hire: hire, __tenureMonths: months,
+      __att: t.Rolling_Attendance_Pct === '' ? null : parseFloat(t.Rolling_Attendance_Pct),
+      __score30: tot30.weighted, __hours30: tot30.hours,
+      __errors90: errByKey[nameKey(t.Name)] || 0,
+      __lastWorked: allTot.last,
+      __bonusRow: bonusKeys.has(nameKey(t.Name))
+    });
+  });
+
+  const active = rows.filter(r => r.Status === 'Active');
+  const newHires = rows.filter(r => r.__hire && inRange(r.__hire, last90));
+  const missingBonus = active.filter(r => !r.__bonusRow);
+  document.getElementById('staffing-kpis').innerHTML = [
+    { label: 'Active technicians', value: active.length, note: `${rows.length - active.length} inactive` },
+    { label: 'New hires (90 days)', value: newHires.length, note: newHires.map(r => r.Name).join(', ') || '—' },
+    { label: 'Team hours (30 days)', value: fmtHours(active.reduce((s, r) => s + r.__hours30, 0)), note: 'Active techs, from Tech_Scores' },
+    { label: 'Missing bonus row', value: missingBonus.length, note: missingBonus.length ? missingBonus.map(r => r.Name).join(', ') : 'Everyone active is on the bonus summary', go: missingBonus.length ? 'bonus' : '' },
+  ].map(k => `<div class="kpi${k.go ? ' clickable' : ''}"${k.go ? ` data-go="${k.go}"` : ''}><div class="label">${esc(k.label)}</div><div class="value">${esc(k.value)}</div><div class="note">${esc(k.note)}</div></div>`).join('');
+
+  const q = nameKey(document.getElementById('staffing-search').value);
+  const statusF = document.getElementById('staffing-status-filter').value;
+  const shown = rows.filter(r => (!statusF || r.Status === statusF) && (!q || nameKey(r.Name).includes(q)));
+
+  const signedIn = !!currentUser;
+  document.getElementById('staffing-add-toggle').style.display = signedIn ? '' : 'none';
+  const cols = [
+    {label:'Name', key:'name', get: r => r.Name},
+    {label:'Status', key:'status', get: r => r.Status},
+    {label:'Hire Date', key:'hire', get: r => r.__hire},
+    {label:'Tenure', key:'tenure', get: r => r.__tenureMonths},
+    {label:'Rolling Attendance', key:'att', get: r => r.__att},
+    {label:'Score (30d)', key:'score', get: r => r.__score30},
+    {label:'Hours (30d)', key:'hours', get: r => r.__hours30},
+    {label:'Errors (90d)', key:'err', get: r => r.__errors90},
+    {label:'Last Worked', key:'last', get: r => r.__lastWorked},
+    {label:'Bonus Row', key:'bonus', get: r => r.__bonusRow ? 1 : 0},
+    {label: signedIn ? 'Change' : ''}
+  ];
+  const tenure = m => m === null ? '—' : m < 12 ? `${m} mo` : `${Math.floor(m / 12)} yr ${m % 12 ? (m % 12) + ' mo' : ''}`;
+  buildSortableTable(document.getElementById('staffing-table'), cols, shown, r => `<tr>
+      <td>${techLink(r.Name)}</td>
+      <td>${r.Status === 'Active' ? '<span class="badge green">Active</span>' : `<span class="badge grey">${esc(r.Status || '—')}</span>`}</td>
+      <td>${esc(r.Hire_Date) || '—'}</td>
+      <td>${tenure(r.__tenureMonths)}</td>
+      <td>${r.__att === null || isNaN(r.__att) ? '—' : (r.__att < 0.95 ? `<span class="badge red">${(r.__att * 100).toFixed(1)}%</span>` : `${(r.__att * 100).toFixed(1)}%`)}</td>
+      <td>${fmtPct(r.__score30)}</td>
+      <td>${r.__hours30 ? fmtHours(r.__hours30) : '—'}</td>
+      <td>${r.__errors90 || '—'}</td>
+      <td>${fmtDateUS(r.__lastWorked)}</td>
+      <td>${r.__bonusRow ? '✓' : (r.Status === 'Active' ? '<span class="badge amber">Missing</span>' : '—')}</td>
+      <td>${signedIn ? `<button type="button" class="btn-sm" data-set-status="${r.Status === 'Active' ? 'Inactive' : 'Active'}" data-tech-name="${esc(r.Name)}">${r.Status === 'Active' ? 'Set inactive' : 'Set active'}</button>` : ''}</td>
+    </tr>`, { key: 'name', dir: 1 });
+
+  renderStaffingAddForm();
+  renderNameCheck();
+}
+
+function renderStaffingAddForm(){
+  const wrap = document.getElementById('staffing-add-wrap');
+  if (!currentUser || !staffingAddOpen){ wrap.innerHTML = ''; return; }
+  if (wrap.querySelector('#form-addtech')) return; // keep what's being typed
+  const t = new Date();
+  const today = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+  wrap.innerHTML = `
+    <div class="card">
+      <h2>Add technician</h2>
+      <div class="desc">Adds a row to the Technicians tab (with the attendance formulas copied from row 2). Use the exact name that will appear in Tech_Scores, so scores and bonuses line up.</div>
+      <form id="form-addtech">
+        <div class="form-grid">
+          <div class="field"><label>Full name <span class="req">*</span></label><input type="text" name="Name" required placeholder="First Last" autocomplete="off"></div>
+          <div class="field"><label>Hire date <span class="req">*</span></label><input type="date" name="Hire_Date" required value="${today}"></div>
+          <div class="field"><label>Status</label><select name="Status"><option>Active</option><option>Inactive</option></select></div>
+          <div class="field"><label style="display:flex;align-items:center;gap:8px;margin-top:26px;"><input type="checkbox" name="AddBonus" checked style="width:auto;"> Also add to Monthly_Bonus_Summary</label></div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Add technician</button>
+          <button type="button" class="btn-neutral" id="addtech-cancel">Cancel</button>
+          <span class="form-msg" id="addtech-msg"></span>
+        </div>
+      </form>
+    </div>`;
+}
+
+// Technicians whose Rolling_Attendance_Pct reads 0% with no absences
+// logged — almost always a typed value where the formula should be.
+function brokenAttendanceTechs(){
+  const absent = new Set((DATA.Attendance_Log || []).filter(a => parseFloat(a.Hours_Missed) > 0).map(a => nameKey(a.Technician_Name)));
+  return (DATA.Technicians || []).filter(t => t.Name && t.Rolling_Attendance_Pct !== '' &&
+    parseFloat(t.Rolling_Attendance_Pct) === 0 && !absent.has(nameKey(t.Name)));
+}
+
+async function repairTechFormulas(names){
+  const ids = await getSheetIds();
+  const reqs = [];
+  for (const n of names){
+    const row = await sheetsFindRow('Technicians', 'B', n);
+    if (row > 1) reqs.push(copyTemplateRowRequest(ids['Technicians'], 3, 5, row, 1));
+  }
+  if (reqs.length) await sheetsBatchUpdate(reqs);
+  return reqs.length;
+}
+
+// Names in other tabs that don't match the Technicians list.
+function renderNameCheck(){
+  const known = new Set((DATA.Technicians || []).map(t => nameKey(t.Name)));
+  const found = {};
+  function note(src, name, dateStr){
+    if (!name || known.has(nameKey(name))) return;
+    const k = name.trim();
+    const f = found[k] || (found[k] = { name: k, sources: {}, first: null, last: null });
+    f.sources[src] = (f.sources[src] || 0) + 1;
+    const d = parseFlexDate(dateStr);
+    if (d){ if (!f.first || d < f.first) f.first = d; if (!f.last || d > f.last) f.last = d; }
+  }
+  (DATA.Tech_Scores || []).forEach(s => note('Tech_Scores', s.Name, s.Date));
+  (DATA.Error_Log || []).forEach(e => note('Error_Log', e.Technician_Name, e.Incident_Date));
+  (DATA.Attendance_Log || []).forEach(a => note('Attendance_Log', a.Technician_Name, a.Work_Date));
+  const list = Object.values(found).sort((a, b) => (b.last || 0) - (a.last || 0));
+  // Suggest the closest real name (same last name) when there is one.
+  const techNames = (DATA.Technicians || []).map(t => t.Name);
+  const suggest = n => {
+    const last = nameKey(n).split(' ').pop();
+    const m = techNames.filter(t => nameKey(t).split(' ').pop() === last);
+    return m.length ? `probably <b>${m.map(esc).join(' or ')}</b>` : '';
+  };
+  const broken = brokenAttendanceTechs();
+  const brokenHtml = broken.length ? `
+    <div class="callout"><b>Attendance formula missing:</b> ${broken.map(t => techLink(t.Name)).join(', ')} show 0% rolling attendance with no absences logged.
+      Their Rolling_Scheduled_Hours / Rolling_Attendance_Pct cells (columns D–E) hold typed values instead of the formulas, so the bonus summary will treat them as forfeited for attendance.
+      <div class="action-row" style="margin-top:8px;">${currentUser
+        ? `<button type="button" class="btn-primary" id="repair-att-btn" style="padding:8px 14px;">Repair formulas</button><span class="muted" style="font-size:12.5px;">Copies columns D–E from row 2 into their rows.</span>`
+        : '<span class="muted">Sign in to repair with one click.</span>'}</div></div>` : '';
+  document.getElementById('staffing-dq').innerHTML = brokenHtml + (list.length ? `
+    <table><thead><tr><th>Name as entered</th><th>Where</th><th>Dates</th><th>Suggestion</th></tr></thead><tbody>
+    ${list.map(f => `<tr><td>“${esc(f.name)}”</td><td>${Object.entries(f.sources).map(([s, n]) => `${esc(s)} (${n})`).join(', ')}</td>
+      <td>${f.first ? fmtDateUS(f.first) + (f.last && f.last - f.first ? ' – ' + fmtDateUS(f.last) : '') : '—'}</td><td>${suggest(f.name) || '—'}</td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty">All names match the Technicians tab.</div>');
+}
+
+document.getElementById('staffing-search').addEventListener('input', renderStaffing);
+document.getElementById('staffing-status-filter').addEventListener('change', () => { prefSet('staffingStatus', document.getElementById('staffing-status-filter').value); renderStaffing(); });
+(function(){ const v = prefGet('staffingStatus', 'Active'); const sel = document.getElementById('staffing-status-filter'); if ([...sel.options].some(o => o.value === v)) sel.value = v; })();
+document.getElementById('staffing-add-toggle').addEventListener('click', () => {
+  staffingAddOpen = !staffingAddOpen;
+  renderStaffingAddForm();
+  const f = document.querySelector('#form-addtech input[name="Name"]');
+  if (f) f.focus();
+});
+document.getElementById('staffing-kpis').addEventListener('click', e => {
+  const k = e.target.closest('.kpi[data-go]');
+  if (k) switchView(k.dataset.go);
+});
+document.getElementById('staffing-dq').addEventListener('click', async e => {
+  if (e.target.id !== 'repair-att-btn') return;
+  const btn = e.target; btn.disabled = true; btn.textContent = 'Repairing…';
+  try {
+    const names = brokenAttendanceTechs().map(t => t.Name);
+    const n = await repairTechFormulas(names);
+    await loadAll();
+    showToast(`Repaired attendance formulas for ${n} technician${n === 1 ? '' : 's'}`);
+  } catch (err){ showToast(err.message); btn.disabled = false; btn.textContent = 'Repair formulas'; }
+});
+document.getElementById('staffing-add-wrap').addEventListener('click', e => {
+  if (e.target.id === 'addtech-cancel'){ staffingAddOpen = false; renderStaffingAddForm(); }
+});
+document.getElementById('staffing-add-wrap').addEventListener('submit', async e => {
+  if (e.target.id !== 'form-addtech') return;
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const msg = document.getElementById('addtech-msg');
+  const btn = e.target.querySelector('button[type=submit]');
+  const name = String(fd.get('Name') || '').trim().replace(/\s+/g, ' ');
+  const status = fd.get('Status') || 'Active';
+  btn.disabled = true; msg.className = 'form-msg'; msg.textContent = 'Saving…';
+  try {
+    if (!name) throw new Error('Enter a name.');
+    await addTechnicianToSheet(name, fd.get('Hire_Date'), status);
+    if (fd.get('AddBonus')) await addBonusSummaryRows([name]);
+    staffingAddOpen = false;
+    await loadAll();
+    showToast(`Added ${name}${fd.get('AddBonus') ? ' (and their bonus summary row)' : ''}`);
+  } catch (err){
+    msg.className = 'form-msg error'; msg.textContent = err.message;
+    btn.disabled = false;
+  }
+});
+document.getElementById('staffing-table').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-set-status]');
+  if (!b) return;
+  const name = b.dataset.techName, status = b.dataset.setStatus;
+  b.disabled = true; b.textContent = 'Saving…';
+  try {
+    await setTechnicianStatus(name, status);
+    // Making someone active? Make sure the sheet calculates their bonus.
+    let extra = '';
+    if (status === 'Active'){
+      const added = await addBonusSummaryRows([name]);
+      if (added.length) extra = ' and added to the bonus summary';
+    }
+    await loadAll();
+    showToast(`${name} set to ${status}${extra}`);
+  } catch (err){
+    showToast(err.message);
+    b.disabled = false; b.textContent = status === 'Active' ? 'Set active' : 'Set inactive';
+  }
+});
+
+// ---------- Equipment filters (department + station type) ----------
+// Station type is the station name without its trailing number:
+// "Paper Station 3" -> "Paper Station", "VIDEO-2-05" -> "Video 2",
+// "AUDIO-1" -> "Audio". Single stations (e.g. "Film RTR") are their own type.
+function stationType(st){
+  if (!st) return 'Unassigned';
+  let n = String(st.Station_Name || st.Station_ID || '').trim();
+  n = n.replace(/(\s+|-)\d+$/, '');
+  if (/^[A-Z0-9\-]+$/.test(n)) n = n.toLowerCase().replace(/(^|-)([a-z])/g, (m, sep, c) => (sep ? ' ' : '') + c.toUpperCase()).replace(/-/g, ' ');
+  return n || 'Other';
+}
+let equipFilter = { dept: prefGet('equipDept', ''), type: prefGet('equipType', '') };
+function stationMatchesFilter(st){
+  const dept = st ? (st.Department || 'Other') : 'Unassigned';
+  if (equipFilter.dept && dept !== equipFilter.dept) return false;
+  if (equipFilter.type && stationType(st) !== equipFilter.type) return false;
+  return true;
+}
+function renderEquipFilterControls(){
+  const stations = DATA.Stations || [];
+  const depts = [...new Set(stations.map(s => s.Department || 'Other'))];
+  if (equipFilter.dept && !depts.includes(equipFilter.dept)) equipFilter.dept = '';
+  document.getElementById('equip-dept-filter').innerHTML = ['', ...depts].map(d =>
+    `<button type="button" data-dept="${esc(d)}" class="${d === equipFilter.dept ? 'active' : ''}">${d ? esc(d) : 'All'}</button>`).join('');
+  const types = [];
+  stations.filter(s => !equipFilter.dept || (s.Department || 'Other') === equipFilter.dept).forEach(s => {
+    const t = stationType(s);
+    const label = equipFilter.dept ? t : `${s.Department || 'Other'} — ${t}`;
+    if (!types.some(x => x.t === t)) types.push({ t, label, n: 0 });
+    types.find(x => x.t === t).n++;
+  });
+  if (equipFilter.type && !types.some(x => x.t === equipFilter.type)) equipFilter.type = '';
+  const sel = document.getElementById('equip-type-filter');
+  sel.innerHTML = `<option value="">All station types</option>` + types.map(x => `<option value="${esc(x.t)}">${esc(x.label)} (${x.n})</option>`).join('');
+  sel.value = equipFilter.type;
+  const nSt = stations.filter(stationMatchesFilter).length;
+  document.getElementById('equip-filter-note').textContent = (equipFilter.dept || equipFilter.type) ? `${nSt} of ${stations.length} stations shown` : `${stations.length} stations`;
+}
+document.getElementById('equip-dept-filter').addEventListener('click', e => {
+  const b = e.target.closest('button[data-dept]');
+  if (!b) return;
+  equipFilter.dept = b.dataset.dept; equipFilter.type = '';
+  prefSet('equipDept', equipFilter.dept); prefSet('equipType', '');
+  renderEquipment();
+});
+document.getElementById('equip-type-filter').addEventListener('change', e => {
+  equipFilter.type = e.target.value; prefSet('equipType', equipFilter.type);
+  renderEquipment();
+});
+
 // ---------- EQUIPMENT HEALTH (department + station status overview) ----------
 // Status per asset: Decommissioned -> red (needs replacement), Backup status
 // or an unresolved "Issue Reported" as the most recent Maintenance_Log entry
@@ -1402,13 +2377,14 @@ function computeEquipmentHealth(){
     return depts[name];
   }
   // Seed every known station (even ones with no equipment yet) so they still show up.
-  stations.forEach(s => {
+  stations.filter(stationMatchesFilter).forEach(s => {
     const dept = ensureDept(s.Department || 'Other');
     dept.stations[s.Station_ID] = { station: s, assets: [], status: 'grey' };
   });
 
   equip.forEach(a => {
     const st = stationMap[a.Current_Station_ID];
+    if (!stationMatchesFilter(st)) return;
     const deptName = st ? (st.Department || 'Other') : 'Unassigned';
     const dept = ensureDept(deptName);
     if (!dept.stations[a.Current_Station_ID]){
@@ -1573,14 +2549,28 @@ function renderEquipmentHealth(){
 
 // ---------- EQUIPMENT ----------
 function renderEquipment(){
+  renderEquipFilterControls();
+  // If the pinned station is filtered out, clear the detail panel.
+  if (selectedStationId){
+    const st = (DATA.Stations || []).find(s => s.Station_ID === selectedStationId);
+    if (!stationMatchesFilter(st)) selectedStationId = null;
+  }
   renderEquipmentHealth();
-  const equip = DATA.Equipment || [];
   const stations = DATA.Stations || [];
   const stationMap = {};
   stations.forEach(s => stationMap[s.Station_ID] = s);
-  buildTable(document.getElementById('equipment-table'),
-    [{label:'Asset ID'},{label:'Model'},{label:'Type'},{label:'Station'},{label:'Department'},{label:'Status'},{label:'Purchase Date'}],
-    equip,
+  const equip = (DATA.Equipment || []).filter(e => stationMatchesFilter(stationMap[e.Current_Station_ID]));
+  const cols = [
+    {label:'Asset ID', key:'id', get: e => e.Asset_ID},
+    {label:'Model', key:'model', get: e => e.Model},
+    {label:'Type', key:'type', get: e => e.Type},
+    {label:'Station', key:'station', get: e => { const st = stationMap[e.Current_Station_ID]; return st ? st.Station_Name : e.Current_Station_ID; }},
+    {label:'Station Type', key:'stype', get: e => stationType(stationMap[e.Current_Station_ID])},
+    {label:'Department', key:'dept', get: e => { const st = stationMap[e.Current_Station_ID]; return st ? st.Department : ''; }},
+    {label:'Status', key:'status', get: e => e.Status},
+    {label:'Purchase Date', key:'pdate', get: e => parseFlexDate(e.Purchase_Date)}
+  ];
+  buildSortableTable(document.getElementById('equipment-table'), cols, equip,
     e => {
       const st = stationMap[e.Current_Station_ID];
       const statusCls = statusBadgeClass(e.Status);
@@ -1589,35 +2579,51 @@ function renderEquipment(){
         <td>${esc(e.Model) || '—'}</td>
         <td>${esc(e.Type)}</td>
         <td>${esc(st ? st.Station_Name : e.Current_Station_ID)}</td>
+        <td>${esc(stationType(st))}</td>
         <td>${esc(st ? st.Department : '')}</td>
         <td><span class="badge ${statusCls}">${esc(e.Status)}</span></td>
         <td>${esc(e.Purchase_Date) || '—'}</td>
       </tr>`;
     });
 
-  const maint = DATA.Maintenance_Log || [];
+  const assetIds = new Set(equip.map(e => e.Asset_ID));
+  const filtering = !!(equipFilter.dept || equipFilter.type);
+  const maint = (DATA.Maintenance_Log || []).filter(m => !filtering || assetIds.has(m.Asset_ID));
   document.getElementById('maintenance-body').innerHTML = maint.length
     ? `<div style="overflow-x:auto"><table id="maint-table"></table></div>`
-    : `<div class="empty">No maintenance records logged yet.</div>`;
+    : `<div class="empty">No maintenance records ${filtering ? 'for these stations' : 'logged yet'}.</div>`;
   if (maint.length){
-    buildTable(document.getElementById('maint-table'),
-      [{label:'Log ID'},{label:'Asset ID'},{label:'Date'},{label:'Type'},{label:'Lead'},{label:'Notes'},{label:'Cost'}],
-      maint,
+    const mcols = [
+      {label:'Log ID'},
+      {label:'Asset ID', key:'asset', get: m => m.Asset_ID},
+      {label:'Date', key:'date', get: m => parseFlexDate(m.Log_Date)},
+      {label:'Type', key:'type', get: m => m.Type},
+      {label:'Lead', key:'lead', get: m => m.Technician_Lead},
+      {label:'Notes'},
+      {label:'Cost', key:'cost', get: m => parseFloat(String(m.Cost).replace(/[^0-9.-]/g, ''))}
+    ];
+    buildSortableTable(document.getElementById('maint-table'), mcols, maint,
       m => `<tr>
-        <td>${esc(m.Log_ID)}</td><td>${esc(m.Asset_ID)}</td><td>${esc(m.Log_Date)}</td>
+        <td>${esc(m.Log_ID)}</td><td>${assetLink(m.Asset_ID)}</td><td>${esc(m.Log_Date)}</td>
         <td>${esc(m.Type)}</td><td>${esc(m.Technician_Lead)}</td><td>${esc(m.Notes)}</td><td>${m.Cost ? fmtMoney(m.Cost) : '—'}</td>
       </tr>`);
   }
 }
 
 // ---------- TABS ----------
-document.getElementById('tabs').addEventListener('click', e => {
-  const btn = e.target.closest('button[data-view]');
+function switchView(view){
+  const btn = document.querySelector(`#tabs button[data-view="${view}"]`);
   if (!btn) return;
   document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-  document.getElementById('view-' + btn.dataset.view).classList.add('active');
+  document.getElementById('view-' + view).classList.add('active');
+  window.scrollTo(0, 0);
+}
+document.getElementById('tabs').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-view]');
+  if (!btn) return;
+  switchView(btn.dataset.view);
 });
 
 // Sub-navigation inside the consolidated "+ Log / Add" tab (Log Error, Log
@@ -1715,6 +2721,7 @@ function renderSignedOutUI(){
   document.getElementById('auth-area').innerHTML = `<button class="g-btn" id="signin-btn">Sign in with Google</button>`;
   document.getElementById('signin-btn').addEventListener('click', () => tokenClient.requestAccessToken({ prompt: 'consent' }));
   lockForms(true);
+  onAuthChange();
 }
 
 async function onTokenResponse(resp){
@@ -1739,6 +2746,15 @@ async function onTokenResponse(resp){
   }
 }
 
+// Parts of the page show extra controls when signed in; redraw them when
+// sign-in state changes.
+function onAuthChange(){
+  if (!DATA.Technicians) return;
+  renderStaffing(); renderBonus();
+  if (openErrorId) openErrorDetail(openErrorId);
+  refreshOpenProfile();
+}
+
 function renderSignedInUI(){
   document.getElementById('auth-area').innerHTML = `
     <div class="user-chip">
@@ -1747,6 +2763,7 @@ function renderSignedInUI(){
       <span class="signout" id="signout-btn">Sign out</span>
     </div>`;
   document.getElementById('signout-btn').addEventListener('click', signOut);
+  onAuthChange();
 }
 
 function signOut(){
@@ -1814,6 +2831,103 @@ async function sheetsUpdateRange(a1Range, rowValues){
   });
   if (!res.ok) throw new Error(`Sheets API error (HTTP ${res.status}) — ${await res.text()}`);
   return res.json();
+}
+
+async function sheetsGetValues(a1Range){
+  const res = await fetch(`${SHEETS_API}/values/${encodeURIComponent(a1Range)}`, { headers: { Authorization: `Bearer ${currentUser.accessToken}` } });
+  if (!res.ok) throw new Error(`Could not read ${a1Range} (HTTP ${res.status})`);
+  return (await res.json()).values || [];
+}
+
+// Multi-row version of sheetsUpdateRange.
+async function sheetsUpdateValues(a1Range, rows){
+  const res = await fetch(`${SHEETS_API}/values/${encodeURIComponent(a1Range)}?valueInputOption=USER_ENTERED`, {
+    method: 'PUT',
+    headers: { Authorization: `Bearer ${currentUser.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ values: rows })
+  });
+  if (!res.ok) throw new Error(`Sheets API error (HTTP ${res.status}) — ${await res.text()}`);
+  return res.json();
+}
+
+let __sheetIds = null;
+async function getSheetIds(){
+  if (__sheetIds) return __sheetIds;
+  const res = await fetch(`${SHEETS_API}?fields=${encodeURIComponent('sheets.properties(sheetId,title)')}`, { headers: { Authorization: `Bearer ${currentUser.accessToken}` } });
+  if (!res.ok) throw new Error(`Could not read sheet list (HTTP ${res.status})`);
+  const data = await res.json();
+  __sheetIds = {};
+  (data.sheets || []).forEach(s => __sheetIds[s.properties.title] = s.properties.sheetId);
+  return __sheetIds;
+}
+
+async function sheetsBatchUpdate(requests){
+  const res = await fetch(`${SHEETS_API}:batchUpdate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${currentUser.accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ requests })
+  });
+  if (!res.ok) throw new Error(`Sheets API error (HTTP ${res.status}) — ${await res.text()}`);
+  return res.json();
+}
+
+// Copies row 2 (the template row) of `columns` [startColIndex, endColIndex)
+// onto rows [firstRow, firstRow+count) — formulas shift to the new row the
+// same way they do when you copy/paste in Sheets. Row numbers are 1-based.
+function copyTemplateRowRequest(sheetId, startCol, endCol, firstRow, count){
+  return { copyPaste: {
+    source: { sheetId, startRowIndex: 1, endRowIndex: 2, startColumnIndex: startCol, endColumnIndex: endCol },
+    destination: { sheetId, startRowIndex: firstRow - 1, endRowIndex: firstRow - 1 + count, startColumnIndex: startCol, endColumnIndex: endCol },
+    pasteType: 'PASTE_NORMAL'
+  } };
+}
+
+// 1-based number of the last row with something in the first column of
+// `values` (as returned by sheetsGetValues for a range starting at row 1).
+function lastFilledRow(values){
+  let last = 0;
+  values.forEach((r, i) => { if (String((r && r[0]) || '').trim()) last = i + 1; });
+  return last;
+}
+
+// Adds a Monthly_Bonus_Summary row for each name that doesn't have one:
+// name in column A, bonus formulas (B onward) copied from row 2.
+async function addBonusSummaryRows(names){
+  const TAB = 'Monthly_Bonus_Summary';
+  const colA = await sheetsGetValues(`${TAB}!A:A`);
+  const header = (await sheetsGetValues(`${TAB}!1:1`))[0] || [];
+  const existing = new Set(colA.map(r => nameKey(r && r[0])));
+  const toAdd = [...new Set(names.map(n => String(n).trim()).filter(n => n && !existing.has(nameKey(n))))];
+  if (!toAdd.length) return [];
+  const first = lastFilledRow(colA) + 1;
+  const ids = await getSheetIds();
+  if (ids[TAB] === undefined) throw new Error(`Couldn't find the ${TAB} tab.`);
+  await sheetsUpdateValues(`${TAB}!A${first}:A${first + toAdd.length - 1}`, toAdd.map(n => [safeCellText(n)]));
+  await sheetsBatchUpdate([copyTemplateRowRequest(ids[TAB], 1, Math.max(header.length, 17), first, toAdd.length)]);
+  return toAdd;
+}
+
+// Adds a technician to the Technicians tab: Tech_ID + Name, Hire_Date,
+// Status, and the two attendance formulas (D:E) copied from row 2.
+async function addTechnicianToSheet(name, hireDate, status){
+  const TAB = 'Technicians';
+  const cols = await sheetsGetValues(`${TAB}!A:B`);
+  if (cols.some(r => nameKey(r && r[1]) === nameKey(name) || nameKey(r && r[0]) === nameKey(name))){
+    throw new Error(`${name} is already on the Technicians tab.`);
+  }
+  const row = lastFilledRow(cols.map(r => [(r && (r[0] || r[1])) || ''])) + 1;
+  const ids = await getSheetIds();
+  if (ids[TAB] === undefined) throw new Error(`Couldn't find the ${TAB} tab.`);
+  await sheetsUpdateValues(`${TAB}!A${row}:C${row}`, [[safeCellText(name), safeCellText(name), hireDate]]);
+  await sheetsBatchUpdate([copyTemplateRowRequest(ids[TAB], 3, 5, row, 1)]);
+  await sheetsUpdateValues(`${TAB}!F${row}`, [[status]]);
+  return row;
+}
+
+async function setTechnicianStatus(name, status){
+  const rowNum = await sheetsFindRow('Technicians', 'B', name);
+  if (rowNum < 0) throw new Error(`Couldn't find ${name} on the Technicians tab — try Refresh.`);
+  await sheetsUpdateValues(`Technicians!F${rowNum}`, [[status]]);
 }
 
 // ---------- Drive photo upload ----------
