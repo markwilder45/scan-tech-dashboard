@@ -863,7 +863,15 @@ function parseFlexDate(s){
   if (m){
     const months = {Jan:0,Feb:1,Mar:2,Apr:3,May:4,Jun:5,Jul:6,Aug:7,Sep:8,Oct:9,Nov:10,Dec:11};
     const mon = months[m[2]];
-    if (mon !== undefined) return new Date(new Date().getFullYear(), mon, +m[1]);
+    if (mon !== undefined){
+      // No year in the cell: assume the current year, unless that puts it
+      // more than ~2 months in the future (e.g. "29-Dec" read in January),
+      // in which case it belongs to last year.
+      const now = new Date();
+      let d = new Date(now.getFullYear(), mon, +m[1]);
+      if (d - now > 60 * 24 * 60 * 60 * 1000) d = new Date(now.getFullYear() - 1, mon, +m[1]);
+      return d;
+    }
   }
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
@@ -906,14 +914,16 @@ function computeWeeklyScores(name, numWeeks){
     if (!byWeek[ws]) byWeek[ws] = { sum: 0, n: 0 };
     byWeek[ws].sum += v; byWeek[ws].n += 1;
   });
-  const todayWs = weekStartMonday(new Date()).getTime();
-  const oneWeek = 7 * 24 * 60 * 60 * 1000;
+  // Step back by calendar days, not a fixed 168 hours: across a daylight-
+  // saving change a "week" is 167 or 169 hours long, so subtracting a fixed
+  // number of milliseconds lands an hour off local midnight and no longer
+  // matches the week keys above — every prior week then shows blank.
+  const today = weekStartMonday(new Date());
   const out = [];
   for (let i = 0; i < numWeeks; i++){
-    const ws = todayWs - i * oneWeek;
-    const bucket = byWeek[ws];
-    const start = new Date(ws);
-    const end = new Date(ws + 6 * 24 * 60 * 60 * 1000);
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 7 * i);
+    const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+    const bucket = byWeek[start.getTime()];
     out.push({
       label: (i === 0 ? 'This week ' : '') + `${fmtShort(start)}–${fmtShort(end)}`,
       avg: bucket ? bucket.sum / bucket.n : null,
@@ -1236,13 +1246,18 @@ function renderErrorLog(){
   const errors = DATA.Error_Log || [];
   const statusSel = document.getElementById('errorlog-status-filter');
   const techSel = document.getElementById('errorlog-tech-filter');
-  if (statusSel.options.length <= 1){
-    [...new Set(errors.map(e => e.Confirmation_Status).filter(Boolean))].sort().forEach(s => {
-      const o = document.createElement('option'); o.value = s; o.textContent = s; statusSel.appendChild(o);
-    });
-    [...new Set(errors.map(e => e.Technician_Name).filter(Boolean))].sort().forEach(t => {
-      const o = document.createElement('option'); o.value = t; o.textContent = t; techSel.appendChild(o);
-    });
+  // Rebuild the filter options on every load (not just the first) so new
+  // technicians/statuses added since the page opened appear after a Refresh
+  // or after logging an error. Keep whatever the user had selected.
+  const fill = (sel, values, allLabel) => {
+    const keep = sel.value;
+    sel.innerHTML = `<option value="">${allLabel}</option>` +
+      values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    sel.value = values.includes(keep) ? keep : '';
+  };
+  fill(statusSel, [...new Set(errors.map(e => e.Confirmation_Status).filter(Boolean))].sort(), statusSel.options[0] ? statusSel.options[0].textContent : 'All statuses');
+  fill(techSel, [...new Set(errors.map(e => e.Technician_Name).filter(Boolean))].sort(), 'All technicians');
+  if (!statusSel.onchange){
     statusSel.onchange = renderErrorLogTable;
     techSel.onchange = renderErrorLogTable;
     document.getElementById('errorlog-search').oninput = renderErrorLogTable;
