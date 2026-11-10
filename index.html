@@ -46,11 +46,15 @@
   .badge.red{background:var(--red-bg);color:var(--red);}
   .badge.amber{background:var(--amber-bg);color:var(--amber);}
   .badge.grey{background:#eef0f3;color:#555;}
+  .badge.blue{background:#e7f1fb;color:#1c4f8a;}
   .controls{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center;}
   .controls input,.controls select{padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;background:#fff;}
   .controls input{flex:1;min-width:180px;}
   .controls input[type=checkbox]{flex:none;min-width:0;}
   #bonus-table td:first-child,#staffing-table td:first-child{white-space:nowrap;}
+  #bonus-table th,#bonus-table td,#staffing-table th,#staffing-table td{padding:8px 6px;font-size:12.5px;}
+  #bonus-table th,#staffing-table th{font-size:10.5px;}
+  #bonus-table .badge{white-space:normal;}
   .bar-row{display:flex;align-items:center;gap:10px;padding:6px 0;font-size:13px;}
   .bar-row .name{width:150px;flex-shrink:0;color:var(--text);}
   .bar-track{flex:1;background:#eef0f3;border-radius:6px;height:14px;overflow:hidden;}
@@ -283,7 +287,6 @@
       <h2>Monthly Bonus Summary</h2>
       <div class="desc" id="bonus-period"></div>
       <div class="controls">
-        <label style="display:inline-flex;align-items:center;gap:6px;font-size:13px;"><input type="checkbox" id="bonus-show-inactive"> Include inactive technicians</label>
         <span class="muted" id="bonus-inactive-note" style="font-size:12.5px;"></span>
         <span style="flex:1"></span>
         <button type="button" class="btn-sm" id="bonus-export-btn">⬇ Export payroll report (CSV)</button>
@@ -296,6 +299,7 @@
   <!-- STAFFING -->
   <section id="view-staffing" class="view">
     <div class="kpi-row" id="staffing-kpis"></div>
+    <div id="staffing-dept-setup"></div>
     <div id="staffing-add-wrap"></div>
     <div class="card">
       <h2>Technicians</h2>
@@ -307,6 +311,7 @@
           <option value="Inactive">Inactive only</option>
           <option value="">All technicians</option>
         </select>
+        <select id="staffing-dept-filter"><option value="">All departments</option></select>
         <span style="flex:1"></span>
         <button type="button" class="btn-primary" id="staffing-add-toggle" style="padding:8px 14px;">+ Add technician</button>
       </div>
@@ -835,6 +840,24 @@ const CONFIRMED_STATUS = 'Confirmed Penalty';
 const PENDING_STATUS = 'Pending Review';
 const REMOVED_STATUS = 'Removed - No Impact';
 function isRemoved(e){ return /^removed/i.test((e && e.Confirmation_Status) || ''); }
+
+// Departments (Technicians tab, "Department" column). Operations staff have
+// attendance and scores tracked but are not part of the bonus program.
+const DEPARTMENTS = ['Photo', 'Film', 'Video', 'Operations'];
+const NON_BONUS_DEPTS = ['Operations'];
+function techByName(name){
+  const k = nameKey(name);
+  return (DATA.Technicians || []).find(t => nameKey(t.Name) === k) || null;
+}
+function techDeptOf(t){
+  const raw = String((t && t.Department) || '').trim();
+  return DEPARTMENTS.find(d => d.toLowerCase() === raw.toLowerCase()) || raw;
+}
+// True once the Technicians tab has a "Department" header.
+function hasDeptColumn(){
+  const t = (DATA.Technicians || [])[0];
+  return !!t && Object.prototype.hasOwnProperty.call(t, 'Department');
+}
 function isPendingReview(e){ return ((e && e.Confirmation_Status) || '').toLowerCase() === 'pending review'; }
 function needsCoaching(e){ return !isRemoved(e) && ((e && e['Coaching Status']) || '').toLowerCase().includes('pending'); }
 
@@ -1181,7 +1204,9 @@ function computeWeeklyScores(name, numWeeks){
 function openProfile(name){
   openProfileName = name;
   const k = nameKey(name);
-  const errors = (DATA.Error_Log || []).filter(e => nameKey(e.Technician_Name) === k).reverse();
+  // Removed errors (no bonus impact) stay in the Error Log but are left off
+  // the technician's profile.
+  const errors = (DATA.Error_Log || []).filter(e => nameKey(e.Technician_Name) === k && !isRemoved(e)).reverse();
   const attendance = (DATA.Attendance_Log || []).filter(a => nameKey(a.Technician_Name) === k).reverse();
   const bonus = (DATA.Monthly_Bonus_Summary || []).find(b => nameKey(b.Technician) === k);
   const tech = (DATA.Technicians || []).find(t => nameKey(t.Name) === k);
@@ -1196,6 +1221,7 @@ function openProfile(name){
   const prevTot = scoreTotals(name, lastM), mtdTot = scoreTotals(name, thisM);
   const statusLine = tech
     ? `<div class="desc" style="margin:-4px 0 14px;">${tech.Status === 'Active' ? '<span class="badge green">Active</span>' : '<span class="badge grey">Inactive</span>'}
+       ${techDeptOf(tech) ? `<span class="badge blue">${esc(techDeptOf(tech))}</span>` : ''}
        &nbsp;Hired ${esc(tech.Hire_Date) || '—'} · Rolling attendance ${tech.Rolling_Attendance_Pct ? (parseFloat(tech.Rolling_Attendance_Pct) * 100).toFixed(1) + '%' : '—'}</div>`
     : `<div class="callout">“${esc(name)}” isn't on the Technicians tab — check the spelling in the sheet.</div>`;
 
@@ -1226,8 +1252,10 @@ function openProfile(name){
         </div>
       </div>
     </div>` : `
-    <div class="callout"><b>${esc(name)} has no row on the Monthly_Bonus_Summary tab</b>, so the sheet isn't calculating a bonus for them.
-      ${currentUser ? `<button type="button" class="btn-sm" data-add-bonus-row="${esc(name)}" style="margin-left:6px;">Add bonus summary row</button>` : 'Sign in, then use “Add missing rows” on the Bonus Overview tab to fix this.'}</div>
+    ${tech && !isBonusEligible(tech)
+      ? `<div class="callout info">${esc(name)} isn't bonus-eligible (${esc(bonusIneligibleReason(tech))}). Attendance and scores are still tracked below.</div>`
+      : `<div class="callout"><b>${esc(name)} has no row on the Monthly_Bonus_Summary tab</b>, so the sheet isn't calculating a bonus for them.
+      ${currentUser ? `<button type="button" class="btn-sm" data-add-bonus-row="${esc(name)}" style="margin-left:6px;">Add bonus summary row</button>` : 'Sign in, then use “Add missing rows” on the Bonus Overview tab to fix this.'}</div>`}
     <div class="two-col">
       <div class="card">
         <h2>Prior month (${esc(lastM.long)}) — from Tech_Scores</h2>
@@ -1259,7 +1287,9 @@ function openProfile(name){
         </div>`).join('')}
     </div>`;
 
-  body.innerHTML = statusLine + bonusHtml + weeksHtml + `
+  const ineligibleNote = (bonus && tech && !isBonusEligible(tech))
+    ? `<div class="callout info">${esc(name)} isn't bonus-eligible (${esc(bonusIneligibleReason(tech))}), so the figures below aren't paid out.</div>` : '';
+  body.innerHTML = statusLine + ineligibleNote + bonusHtml + weeksHtml + `
     <div class="card">
       <h2>Error history (${errors.length})</h2>
       <div style="overflow-x:auto"><table id="profile-errors-table"></table></div>
@@ -1562,7 +1592,7 @@ function renderOverview(){
   let eligible = 0, forfeited = 0, latestPeriod = '';
   if (bonus.length){
     latestPeriod = bonus[0]['Month/Year'];
-    bonus.filter(b => b['Month/Year'] === latestPeriod).forEach(b => {
+    bonus.filter(b => b['Month/Year'] === latestPeriod && isBonusEligible(techByName(b.Technician))).forEach(b => {
       const s = (b['Final Bonus Status']||'').toLowerCase();
       if (s.includes('eligible')) eligible++; else if (s.includes('forfeited')) forfeited++;
     });
@@ -1814,10 +1844,11 @@ function renderErrorLogTable(){
 }
 
 // ---------- BONUS ----------
+// Eligibility (decided Nov 10): only Active technicians outside a
+// non-bonus department (Operations) are paid a bonus. Inactive and
+// Operations staff still have attendance and scores tracked elsewhere.
 // Hours worked = sum of Tech_Scores hours for the bonus month (the same
-// SUMIFS the sheet's Base Bonus formula uses). Prior Month Score comes from
-// the sheet. Inactive technicians are hidden unless the checkbox is on,
-// but anyone with hours that month is called out so payroll isn't missed.
+// SUMIFS the sheet's Base Bonus formula uses).
 function bonusPeriodInfo(){
   const allBonus = DATA.Monthly_Bonus_Summary || [];
   const period = allBonus.length ? allBonus[0]['Month/Year'] : null;
@@ -1826,55 +1857,76 @@ function bonusPeriodInfo(){
   return { period, r, label };
 }
 
-function bonusRowsForDisplay(includeInactive){
+// Why someone isn't bonus-eligible ('' = eligible).
+function bonusIneligibleReason(t){
+  if (!t) return 'not on the Technicians tab';
+  if (t.Status !== 'Active') return 'inactive';
+  const d = techDeptOf(t);
+  if (NON_BONUS_DEPTS.includes(d)) return `${d} department`;
+  return '';
+}
+function isBonusEligible(t){ return !bonusIneligibleReason(t); }
+
+function bonusRowsAll(){
   const { r } = bonusPeriodInfo();
-  const techByKey = {};
-  (DATA.Technicians || []).forEach(t => techByKey[nameKey(t.Name)] = t);
   return (DATA.Monthly_Bonus_Summary || []).filter(b => b.Technician).map(b => {
-    const t = techByKey[nameKey(b.Technician)];
+    const t = techByName(b.Technician);
     const tot = scoreTotals(b.Technician, r);
     return Object.assign({}, b, {
-      __active: !!(t && t.Status === 'Active'),
+      __tech: t,
+      __dept: t ? (techDeptOf(t) || 'Unassigned') : 'Unassigned',
+      __why: bonusIneligibleReason(t),
       __hours: tot.hours,
       __score: parseScore(b['Prior Month Score']),
       __base: parseFloat(String(b['Base Bonus Amount']).replace(/[^0-9.-]/g, '')) || 0,
       __final: parseFloat(String(b['Adjusted Final Bonus']).replace(/[^0-9.-]/g, '')) || 0
     });
-  }).filter(b => includeInactive || b.__active);
+  });
 }
+function bonusRowsForDisplay(){ return bonusRowsAll().filter(b => !b.__why); }
 
-// Technicians with no Monthly_Bonus_Summary row who are Active or worked
-// during the bonus month — the sheet calculates nothing for them.
+// Eligible technicians with no Monthly_Bonus_Summary row — the sheet
+// calculates nothing for them.
 function bonusMissingTechs(){
   const have = new Set((DATA.Monthly_Bonus_Summary || []).map(b => nameKey(b.Technician)));
   const { r } = bonusPeriodInfo();
   return (DATA.Technicians || [])
-    .filter(t => t.Name && !have.has(nameKey(t.Name)))
+    .filter(t => t.Name && !have.has(nameKey(t.Name)) && isBonusEligible(t))
     .map(t => ({ name: t.Name, status: t.Status, hours: scoreTotals(t.Name, r).hours }))
-    .filter(x => x.status === 'Active' || x.hours > 0)
     .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
+}
+
+// Totals per department, in DEPARTMENTS order then any others.
+function bonusDeptTotals(rows){
+  const by = {};
+  rows.forEach(b => {
+    const d = b.__dept;
+    const t = by[d] || (by[d] = { dept: d, n: 0, h: 0, base: 0, fin: 0 });
+    t.n++; t.h += b.__hours; t.base += b.__base; t.fin += b.__final;
+  });
+  const order = d => { const i = DEPARTMENTS.indexOf(d); return i < 0 ? 99 : i; };
+  return Object.values(by).sort((a, b) => order(a.dept) - order(b.dept) || a.dept.localeCompare(b.dept));
 }
 
 function renderBonus(){
   const { period, label } = bonusPeriodInfo();
-  const showInactive = document.getElementById('bonus-show-inactive').checked;
   document.getElementById('bonus-period').textContent = period
     ? `Bonus period ${period} (${label}). Hours worked are summed from Tech_Scores for that month; everything else comes from the Monthly_Bonus_Summary tab.`
     : 'No bonus data available yet';
 
-  const rows = bonusRowsForDisplay(showInactive);
-  const hiddenInactive = bonusRowsForDisplay(true).filter(b => !b.__active);
-  const hiddenWithHours = hiddenInactive.filter(b => b.__hours > 0);
-  document.getElementById('bonus-inactive-note').textContent = showInactive ? '' :
-    (hiddenWithHours.length ? `${hiddenWithHours.length} inactive with hours in ${label} hidden (${hiddenWithHours.map(b => b.Technician).join(', ')})` : '');
+  const rows = bonusRowsForDisplay();
+  const excluded = bonusRowsAll().filter(b => b.__why);
+  document.getElementById('bonus-inactive-note').innerHTML =
+    `Active technicians only — inactive and ${NON_BONUS_DEPTS.join(' / ')} staff aren't bonus-eligible.` +
+    (excluded.length ? ` <span title="${esc(excluded.map(b => `${b.Technician}: ${b.__why}`).join('\n'))}" style="text-decoration:underline dotted;cursor:help;">${excluded.length} row${excluded.length === 1 ? '' : 's'} on the summary not shown</span>.` : '');
 
   // Missing-row warning
   const missing = bonusMissingTechs();
   const box = document.getElementById('bonus-missing');
   box.innerHTML = missing.length ? `
     <div class="callout">
-      <b>${missing.length} technician${missing.length === 1 ? ' has' : 's have'} no row on the Monthly_Bonus_Summary tab</b>, so the sheet isn't calculating a bonus for ${missing.length === 1 ? 'them' : 'them'}:
-      ${missing.map(m => `${techLink(m.name)} <span class="muted">(${fmtHours(m.hours)} hrs in ${esc(label)}${m.status !== 'Active' ? ', inactive' : ''})</span>`).join(' · ')}
+      <b>${missing.length} eligible technician${missing.length === 1 ? ' has' : 's have'} no row on the Monthly_Bonus_Summary tab</b>, so the sheet isn't calculating a bonus for them:
+      ${missing.map(m => `${techLink(m.name)} <span class="muted">(${fmtHours(m.hours)} hrs in ${esc(label)})</span>`).join(' · ')}
       ${(() => { const b = brokenAttendanceTechs().filter(t => missing.some(m => nameKey(m.name) === nameKey(t.Name))); return b.length
         ? `<div style="margin-top:6px;">⚠ ${b.map(t => esc(t.Name)).join(', ')} also ${b.length === 1 ? 'has' : 'have'} a broken attendance formula (0%) — adding the rows below repairs it too, otherwise the sheet would mark them forfeited.</div>` : ''; })()}
       <div class="action-row" style="margin-top:10px;">
@@ -1888,6 +1940,7 @@ function renderBonus(){
 
   const cols = [
     {label:'Technician', key:'tech', get: b => b.Technician},
+    {label:'Department', key:'dept', get: b => b.__dept},
     {label:'Hours Worked', key:'hours', get: b => b.__hours},
     {label:'Prior Mo. Score', key:'score', get: b => b.__score},
     {label:'Clerical', key:'cler', get: b => parseFloat(b['Clerical Errors'])},
@@ -1899,12 +1952,16 @@ function renderBonus(){
     {label:'Final Bonus', key:'final', get: b => b.__final}
   ];
   const tot = rows.reduce((a, b) => ({ h: a.h + b.__hours, base: a.base + b.__base, fin: a.fin + b.__final }), { h: 0, base: 0, fin: 0 });
-  const footer = rows.length ? `<tfoot><tr style="font-weight:700;">
-      <td>Total (${rows.length})</td><td>${fmtHours(tot.h)}</td><td></td><td></td><td></td><td></td><td></td><td></td>
-      <td>${fmtMoney(tot.base)}</td><td>${fmtMoney(tot.fin)}</td></tr></tfoot>` : '';
+  const depts = bonusDeptTotals(rows);
+  const blank = '<td></td>'.repeat(6);
+  const footer = rows.length ? `<tfoot>
+      ${depts.length > 1 ? depts.map(d => `<tr style="color:var(--muted);">
+        <td>${esc(d.dept)} subtotal</td><td>${d.n}</td><td>${fmtHours(d.h)}</td>${blank}<td>${fmtMoney(d.base)}</td><td>${fmtMoney(d.fin)}</td></tr>`).join('') : ''}
+      <tr style="font-weight:700;"><td>Total</td><td>${rows.length}</td><td>${fmtHours(tot.h)}</td>${blank}<td>${fmtMoney(tot.base)}</td><td>${fmtMoney(tot.fin)}</td></tr></tfoot>` : '';
   buildSortableTable(document.getElementById('bonus-table'), cols, rows,
     b => `<tr>
-      <td>${techLink(b.Technician)}${b.__active ? '' : ' <span class="badge grey">Inactive</span>'}</td>
+      <td>${techLink(b.Technician)}</td>
+      <td>${b.__dept === 'Unassigned' ? '<span class="muted">Unassigned</span>' : esc(b.__dept)}</td>
       <td>${fmtHours(b.__hours)}</td>
       <td>${fmtPct(b.__score)}</td>
       <td>${esc(b['Clerical Errors'])}</td>
@@ -1919,9 +1976,9 @@ function renderBonus(){
 
 // Rows in the order currently shown on screen (respects the sort).
 function bonusRowsInDisplayOrder(){
-  const rows = bonusRowsForDisplay(document.getElementById('bonus-show-inactive').checked);
+  const rows = bonusRowsForDisplay();
   const st = SORT_STATE['bonus-table'] || {};
-  const getters = { tech: b => b.Technician, hours: b => b.__hours, score: b => b.__score, base: b => b.__base, final: b => b.__final, status: b => b['Final Bonus Status'],
+  const getters = { tech: b => b.Technician, dept: b => b.__dept, hours: b => b.__hours, score: b => b.__score, base: b => b.__base, final: b => b.__final, status: b => b['Final Bonus Status'],
     cler: b => parseFloat(b['Clerical Errors']) || 0, order: b => parseFloat(b['Order Errors']) || 0, crit: b => parseFloat(b['Critical Violations']) || 0, att: b => parseFloat(b['Rolling Attendance %']) || 0 };
   const g = getters[st.key];
   return g ? rows.slice().sort((a, b) => (sortCompare(g(a) ?? -1, g(b) ?? -1) * (st.dir || 1))) : rows;
@@ -1932,22 +1989,24 @@ function csvCell(v){ v = String(v ?? ''); return /[",\n]/.test(v) ? `"${v.replac
 function exportBonusCsv(){
   const { period, label } = bonusPeriodInfo();
   const rows = bonusRowsInDisplayOrder();
-  const header = ['Technician','Employee Status','Bonus Period','Hours Worked','Prior Month Score','Clerical Errors','Order Errors','Critical Violations','Disciplinary Warnings','Rolling Attendance %','Final Bonus Status','Base Bonus','Adjusted Final Bonus'];
+  const header = ['Technician','Department','Bonus Period','Hours Worked','Prior Month Score','Clerical Errors','Order Errors','Critical Violations','Disciplinary Warnings','Rolling Attendance %','Final Bonus Status','Base Bonus','Adjusted Final Bonus'];
   const money = n => (Math.round(n * 100) / 100).toFixed(2);
+  const hrs = n => Math.round(n * 100) / 100;
   const lines = [header];
   let h = 0, base = 0, fin = 0;
   rows.forEach(b => {
     h += b.__hours; base += b.__base; fin += b.__final;
-    lines.push([b.Technician, b.__active ? 'Active' : 'Inactive', period, (Math.round(b.__hours * 100) / 100), b.__score === null ? '' : (b.__score * 100).toFixed(1) + '%',
+    lines.push([b.Technician, b.__dept, period, hrs(b.__hours), b.__score === null ? '' : (b.__score * 100).toFixed(1) + '%',
       b['Clerical Errors'], b['Order Errors'], b['Critical Violations'], b['Disciplinary Warnings'], b['Rolling Attendance %'],
       b['Final Bonus Status'], money(b.__base), money(b.__final)]);
   });
-  lines.push(['TOTAL', '', period, Math.round(h * 100) / 100, '', '', '', '', '', '', '', money(base), money(fin)]);
+  lines.push([]);
+  bonusDeptTotals(rows).forEach(d => lines.push([`${d.dept} subtotal (${d.n})`, d.dept, period, hrs(d.h), '', '', '', '', '', '', '', money(d.base), money(d.fin)]));
+  lines.push(['TOTAL', '', period, hrs(h), '', '', '', '', '', '', '', money(base), money(fin)]);
+  lines.push([]);
+  lines.push([`Active technicians only. Inactive and ${NON_BONUS_DEPTS.join('/')} staff are not bonus-eligible.`]);
   const missing = bonusMissingTechs();
-  if (missing.length){
-    lines.push([]);
-    lines.push([`NOTE: no bonus calculated for ${missing.map(m => m.name).join('; ')} (not on Monthly_Bonus_Summary)`]);
-  }
+  if (missing.length) lines.push([`NOTE: no bonus calculated for ${missing.map(m => m.name).join('; ')} (not on Monthly_Bonus_Summary)`]);
   lines.push([`Generated ${new Date().toLocaleString()} from the Scan Tech Error & Bonus Tracker`]);
   const csv = lines.map(r => r.map(csvCell).join(',')).join('\r\n');
   const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
@@ -1962,27 +2021,31 @@ function printBonusReport(){
   const { period, label } = bonusPeriodInfo();
   const rows = bonusRowsInDisplayOrder();
   const tot = rows.reduce((a, b) => ({ h: a.h + b.__hours, base: a.base + b.__base, fin: a.fin + b.__final }), { h: 0, base: 0, fin: 0 });
+  const depts = bonusDeptTotals(rows);
   const missing = bonusMissingTechs();
   const w = window.open('', '_blank');
   if (!w){ showToast('Pop-up blocked — allow pop-ups for this site to print.'); return; }
+  const blank = '<td></td>'.repeat(6);
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Scan Tech Bonus Report ${esc(period || '')}</title>
     <style>body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#111;margin:28px;}h1{font-size:18px;margin:0 0 4px;}
     .sub{color:#555;font-size:12px;margin-bottom:16px;}table{border-collapse:collapse;width:100%;font-size:12px;}
     th,td{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left;}th{font-size:10.5px;text-transform:uppercase;color:#555;}
-    td.n,th.n{text-align:right;}tfoot td{font-weight:700;border-top:2px solid #333;}.note{margin-top:14px;font-size:12px;color:#7a4a00;}</style></head><body>
+    td.n,th.n{text-align:right;}tfoot td{border-top:1px solid #999;}tfoot tr.total td{font-weight:700;border-top:2px solid #333;}
+    tfoot tr.sub td{color:#555;}.note{margin-top:14px;font-size:12px;color:#555;}.warn{color:#7a4a00;}</style></head><body>
     <h1>Scan Tech Bonus Report — ${esc(label)}</h1>
-    <div class="sub">Bonus period ${esc(period || '')} · ${rows.length} technicians · generated ${esc(new Date().toLocaleString())}</div>
-    <table><thead><tr><th>Technician</th><th class="n">Hours</th><th class="n">Prior Mo. Score</th><th class="n">Clerical</th><th class="n">Order</th><th class="n">Critical</th><th class="n">Attendance</th><th>Status</th><th class="n">Base</th><th class="n">Final Bonus</th></tr></thead>
-    <tbody>${rows.map(b => `<tr><td>${esc(b.Technician)}${b.__active ? '' : ' (inactive)'}</td><td class="n">${fmtHours(b.__hours)}</td><td class="n">${fmtPct(b.__score)}</td>
+    <div class="sub">Bonus period ${esc(period || '')} · ${rows.length} eligible technicians · generated ${esc(new Date().toLocaleString())}</div>
+    <table><thead><tr><th>Technician</th><th>Department</th><th class="n">Hours</th><th class="n">Prior Mo. Score</th><th class="n">Clerical</th><th class="n">Order</th><th class="n">Critical</th><th class="n">Attendance</th><th>Status</th><th class="n">Base</th><th class="n">Final Bonus</th></tr></thead>
+    <tbody>${rows.map(b => `<tr><td>${esc(b.Technician)}</td><td>${esc(b.__dept)}</td><td class="n">${fmtHours(b.__hours)}</td><td class="n">${fmtPct(b.__score)}</td>
       <td class="n">${esc(b['Clerical Errors'])}</td><td class="n">${esc(b['Order Errors'])}</td><td class="n">${esc(b['Critical Violations'])}</td><td class="n">${esc(b['Rolling Attendance %'])}</td>
       <td>${esc(b['Final Bonus Status'])}</td><td class="n">${fmtMoney(b['Base Bonus Amount'])}</td><td class="n">${fmtMoney(b['Adjusted Final Bonus'])}</td></tr>`).join('')}</tbody>
-    <tfoot><tr><td>Total</td><td class="n">${fmtHours(tot.h)}</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="n">${fmtMoney(tot.base)}</td><td class="n">${fmtMoney(tot.fin)}</td></tr></tfoot></table>
-    ${missing.length ? `<div class="note">Not included — no bonus summary row: ${missing.map(m => esc(m.name)).join(', ')}</div>` : ''}
+    <tfoot>${depts.map(d => `<tr class="sub"><td>${esc(d.dept)} subtotal (${d.n})</td><td></td><td class="n">${fmtHours(d.h)}</td>${blank}<td class="n">${fmtMoney(d.base)}</td><td class="n">${fmtMoney(d.fin)}</td></tr>`).join('')}
+      <tr class="total"><td>Total</td><td></td><td class="n">${fmtHours(tot.h)}</td>${blank}<td class="n">${fmtMoney(tot.base)}</td><td class="n">${fmtMoney(tot.fin)}</td></tr></tfoot></table>
+    <div class="note">Active technicians only. Inactive and ${esc(NON_BONUS_DEPTS.join('/'))} staff are not bonus-eligible.</div>
+    ${missing.length ? `<div class="note warn">Not included — no bonus summary row: ${missing.map(m => esc(m.name)).join(', ')}</div>` : ''}
     <script>window.onload=function(){window.print();}<\/script></body></html>`);
   w.document.close();
 }
 
-document.getElementById('bonus-show-inactive').addEventListener('change', renderBonus);
 document.getElementById('bonus-export-btn').addEventListener('click', exportBonusCsv);
 document.getElementById('bonus-print-btn').addEventListener('click', printBonusReport);
 
@@ -2071,6 +2134,7 @@ function renderStaffing(){
     const k = nameKey(e.Technician_Name);
     errByKey[k] = (errByKey[k] || 0) + 1;
   });
+  const deptReady = hasDeptColumn();
 
   const rows = techs.filter(t => t.Name).map(t => {
     const hire = parseFlexDate(t.Hire_Date);
@@ -2078,33 +2142,55 @@ function renderStaffing(){
     const allTot = scoreTotals(t.Name, null);
     const months = hire ? monthsBetweenDates(hire, now) : null;
     return Object.assign({}, t, {
+      __dept: techDeptOf(t),
       __hire: hire, __tenureMonths: months,
       __att: t.Rolling_Attendance_Pct === '' ? null : parseFloat(t.Rolling_Attendance_Pct),
       __score30: tot30.weighted, __hours30: tot30.hours,
       __errors90: errByKey[nameKey(t.Name)] || 0,
       __lastWorked: allTot.last,
-      __bonusRow: bonusKeys.has(nameKey(t.Name))
+      __bonusRow: bonusKeys.has(nameKey(t.Name)),
+      __eligible: isBonusEligible(t)
     });
   });
 
   const active = rows.filter(r => r.Status === 'Active');
   const newHires = rows.filter(r => r.__hire && inRange(r.__hire, last90));
-  const missingBonus = active.filter(r => !r.__bonusRow);
+  const missingBonus = rows.filter(r => r.__eligible && !r.__bonusRow);
+  const noDept = active.filter(r => !r.__dept);
+  const deptCounts = DEPARTMENTS.map(d => `${d} ${active.filter(r => r.__dept === d).length}`).join(' · ');
   document.getElementById('staffing-kpis').innerHTML = [
-    { label: 'Active technicians', value: active.length, note: `${rows.length - active.length} inactive` },
+    { label: 'Active technicians', value: active.length, note: deptReady ? deptCounts + (noDept.length ? ` · ${noDept.length} unassigned` : '') : `${rows.length - active.length} inactive` },
     { label: 'New hires (90 days)', value: newHires.length, note: newHires.map(r => r.Name).join(', ') || '—' },
     { label: 'Team hours (30 days)', value: fmtHours(active.reduce((s, r) => s + r.__hours30, 0)), note: 'Active techs, from Tech_Scores' },
-    { label: 'Missing bonus row', value: missingBonus.length, note: missingBonus.length ? missingBonus.map(r => r.Name).join(', ') : 'Everyone active is on the bonus summary', go: missingBonus.length ? 'bonus' : '' },
+    { label: 'Missing bonus row', value: missingBonus.length, note: missingBonus.length ? missingBonus.map(r => r.Name).join(', ') : 'Every bonus-eligible tech is on the summary', go: missingBonus.length ? 'bonus' : '' },
   ].map(k => `<div class="kpi${k.go ? ' clickable' : ''}"${k.go ? ` data-go="${k.go}"` : ''}><div class="label">${esc(k.label)}</div><div class="value">${esc(k.value)}</div><div class="note">${esc(k.note)}</div></div>`).join('');
+
+  // Department setup prompt (until the Technicians tab has the column).
+  const signedIn = !!currentUser;
+  document.getElementById('staffing-dept-setup').innerHTML = deptReady ? '' : `
+    <div class="callout info"><b>Department column not set up yet.</b> This adds a "Department" header in the first empty column of the Technicians tab (column G)
+      with a Photo / Film / Video / Operations dropdown. You can then pick each person's department here. Operations staff are tracked but not bonus-eligible.
+      <div class="action-row" style="margin-top:8px;">${signedIn
+        ? `<button type="button" class="btn-primary" id="dept-setup-btn" style="padding:8px 14px;">Add Department column</button>`
+        : '<span class="muted">Sign in (top right) to add it with one click.</span>'}</div></div>`;
+
+  // Department filter options
+  const deptSel = document.getElementById('staffing-dept-filter');
+  deptSel.style.display = deptReady ? '' : 'none';
+  const keepDept = deptSel.value;
+  deptSel.innerHTML = `<option value="">All departments</option>` + DEPARTMENTS.map(d => `<option value="${d}">${d}</option>`).join('') + `<option value="__none">Unassigned</option>`;
+  deptSel.value = [...deptSel.options].some(o => o.value === keepDept) ? keepDept : '';
 
   const q = nameKey(document.getElementById('staffing-search').value);
   const statusF = document.getElementById('staffing-status-filter').value;
-  const shown = rows.filter(r => (!statusF || r.Status === statusF) && (!q || nameKey(r.Name).includes(q)));
+  const deptF = deptSel.value;
+  const shown = rows.filter(r => (!statusF || r.Status === statusF) && (!q || nameKey(r.Name).includes(q)) &&
+    (!deptF || (deptF === '__none' ? !r.__dept : r.__dept === deptF)));
 
-  const signedIn = !!currentUser;
   document.getElementById('staffing-add-toggle').style.display = signedIn ? '' : 'none';
   const cols = [
     {label:'Name', key:'name', get: r => r.Name},
+    ...(deptReady ? [{label:'Department', key:'dept', get: r => r.__dept}] : []),
     {label:'Status', key:'status', get: r => r.Status},
     {label:'Hire Date', key:'hire', get: r => r.__hire},
     {label:'Tenure', key:'tenure', get: r => r.__tenureMonths},
@@ -2113,12 +2199,24 @@ function renderStaffing(){
     {label:'Hours (30d)', key:'hours', get: r => r.__hours30},
     {label:'Errors (90d)', key:'err', get: r => r.__errors90},
     {label:'Last Worked', key:'last', get: r => r.__lastWorked},
-    {label:'Bonus Row', key:'bonus', get: r => r.__bonusRow ? 1 : 0},
+    {label:'Bonus', key:'bonus', get: r => r.__eligible ? (r.__bonusRow ? 2 : 1) : 0},
     {label: signedIn ? 'Change' : ''}
   ];
   const tenure = m => m === null ? '—' : m < 12 ? `${m} mo` : `${Math.floor(m / 12)} yr ${m % 12 ? (m % 12) + ' mo' : ''}`;
+  const deptCell = r => {
+    if (!signedIn) return r.__dept ? esc(r.__dept) : '<span class="muted">—</span>';
+    const opts = ['', ...DEPARTMENTS];
+    if (r.__dept && !opts.includes(r.__dept)) opts.push(r.__dept);
+    return `<select class="dept-select" data-tech-name="${esc(r.Name)}" style="padding:4px 6px;border:1px solid var(--border);border-radius:6px;font-size:12.5px;background:#fff;">
+      ${opts.map(o => `<option value="${esc(o)}"${o === r.__dept ? ' selected' : ''}>${o ? esc(o) : '— pick —'}</option>`).join('')}</select>`;
+  };
+  const bonusCell = r => {
+    if (!r.__eligible) return `<span class="muted" title="${esc(bonusIneligibleReason(r))}">n/a${r.Status === 'Active' && NON_BONUS_DEPTS.includes(r.__dept) ? ' (' + esc(r.__dept) + ')' : ''}</span>`;
+    return r.__bonusRow ? '✓' : '<span class="badge amber">Missing</span>';
+  };
   buildSortableTable(document.getElementById('staffing-table'), cols, shown, r => `<tr>
       <td>${techLink(r.Name)}</td>
+      ${deptReady ? `<td>${deptCell(r)}</td>` : ''}
       <td>${r.Status === 'Active' ? '<span class="badge green">Active</span>' : `<span class="badge grey">${esc(r.Status || '—')}</span>`}</td>
       <td>${esc(r.Hire_Date) || '—'}</td>
       <td>${tenure(r.__tenureMonths)}</td>
@@ -2127,7 +2225,7 @@ function renderStaffing(){
       <td>${r.__hours30 ? fmtHours(r.__hours30) : '—'}</td>
       <td>${r.__errors90 || '—'}</td>
       <td>${fmtDateUS(r.__lastWorked)}</td>
-      <td>${r.__bonusRow ? '✓' : (r.Status === 'Active' ? '<span class="badge amber">Missing</span>' : '—')}</td>
+      <td>${bonusCell(r)}</td>
       <td>${signedIn ? `<button type="button" class="btn-sm" data-set-status="${r.Status === 'Active' ? 'Inactive' : 'Active'}" data-tech-name="${esc(r.Name)}">${r.Status === 'Active' ? 'Set inactive' : 'Set active'}</button>` : ''}</td>
     </tr>`, { key: 'name', dir: 1 });
 
@@ -2149,8 +2247,10 @@ function renderStaffingAddForm(){
         <div class="form-grid">
           <div class="field"><label>Full name <span class="req">*</span></label><input type="text" name="Name" required placeholder="First Last" autocomplete="off"></div>
           <div class="field"><label>Hire date <span class="req">*</span></label><input type="date" name="Hire_Date" required value="${today}"></div>
+          <div class="field"><label>Department <span class="req">*</span></label><select name="Department" required><option value="">— pick —</option>${DEPARTMENTS.map(d => `<option>${d}</option>`).join('')}</select></div>
           <div class="field"><label>Status</label><select name="Status"><option>Active</option><option>Inactive</option></select></div>
-          <div class="field"><label style="display:flex;align-items:center;gap:8px;margin-top:26px;"><input type="checkbox" name="AddBonus" checked style="width:auto;"> Also add to Monthly_Bonus_Summary</label></div>
+          <div class="field full"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" name="AddBonus" checked style="width:auto;"> Also add to Monthly_Bonus_Summary</label>
+            <div class="hint" id="addtech-bonus-hint">Only Active technicians outside ${NON_BONUS_DEPTS.join('/')} are bonus-eligible.</div></div>
         </div>
         <div class="form-actions">
           <button type="submit" class="btn-primary">Add technician</button>
@@ -2243,6 +2343,14 @@ document.getElementById('staffing-dq').addEventListener('click', async e => {
 document.getElementById('staffing-add-wrap').addEventListener('click', e => {
   if (e.target.id === 'addtech-cancel'){ staffingAddOpen = false; renderStaffingAddForm(); }
 });
+// Keep the bonus checkbox in line with eligibility while filling the form.
+document.getElementById('staffing-add-wrap').addEventListener('change', e => {
+  const f = e.target.closest('#form-addtech');
+  if (!f || !['Department', 'Status'].includes(e.target.name)) return;
+  const eligible = f.Status.value === 'Active' && !NON_BONUS_DEPTS.includes(f.Department.value);
+  f.AddBonus.checked = eligible;
+  f.AddBonus.disabled = !eligible;
+});
 document.getElementById('staffing-add-wrap').addEventListener('submit', async e => {
   if (e.target.id !== 'form-addtech') return;
   e.preventDefault();
@@ -2251,14 +2359,18 @@ document.getElementById('staffing-add-wrap').addEventListener('submit', async e 
   const btn = e.target.querySelector('button[type=submit]');
   const name = String(fd.get('Name') || '').trim().replace(/\s+/g, ' ');
   const status = fd.get('Status') || 'Active';
+  const dept = fd.get('Department') || '';
+  const addBonus = !!fd.get('AddBonus') && status === 'Active' && !NON_BONUS_DEPTS.includes(dept);
   btn.disabled = true; msg.className = 'form-msg'; msg.textContent = 'Saving…';
   try {
     if (!name) throw new Error('Enter a name.');
-    await addTechnicianToSheet(name, fd.get('Hire_Date'), status);
-    if (fd.get('AddBonus')) await addBonusSummaryRows([name]);
+    if (!dept) throw new Error('Pick a department.');
+    if (!hasDeptColumn()) await setupDepartmentColumn();
+    await addTechnicianToSheet(name, fd.get('Hire_Date'), status, dept);
+    if (addBonus) await addBonusSummaryRows([name]);
     staffingAddOpen = false;
     await loadAll();
-    showToast(`Added ${name}${fd.get('AddBonus') ? ' (and their bonus summary row)' : ''}`);
+    showToast(`Added ${name} (${dept})${addBonus ? ' and their bonus summary row' : ''}`);
   } catch (err){
     msg.className = 'form-msg error'; msg.textContent = err.message;
     btn.disabled = false;
@@ -2271,9 +2383,10 @@ document.getElementById('staffing-table').addEventListener('click', async e => {
   b.disabled = true; b.textContent = 'Saving…';
   try {
     await setTechnicianStatus(name, status);
-    // Making someone active? Make sure the sheet calculates their bonus.
+    // Making an eligible tech active? Make sure the sheet calculates their bonus.
     let extra = '';
-    if (status === 'Active'){
+    const t = techByName(name);
+    if (status === 'Active' && !NON_BONUS_DEPTS.includes(techDeptOf(t))){
       const added = await addBonusSummaryRows([name]);
       if (added.length) extra = ' and added to the bonus summary';
     }
@@ -2283,6 +2396,38 @@ document.getElementById('staffing-table').addEventListener('click', async e => {
     showToast(err.message);
     b.disabled = false; b.textContent = status === 'Active' ? 'Set active' : 'Set inactive';
   }
+});
+document.getElementById('staffing-table').addEventListener('change', async e => {
+  const sel = e.target.closest('select.dept-select');
+  if (!sel) return;
+  const name = sel.dataset.techName, dept = sel.value;
+  sel.disabled = true;
+  try {
+    await setTechnicianDept(name, dept);
+    // Moving an active tech out of Operations into a bonus department?
+    // Make sure the sheet calculates their bonus.
+    let extra = '';
+    const t = techByName(name);
+    if (t && t.Status === 'Active' && dept && !NON_BONUS_DEPTS.includes(dept)){
+      const added = await addBonusSummaryRows([name]);
+      if (added.length) extra = ' and added to the bonus summary';
+    }
+    await loadAll();
+    showToast(`${name}: ${dept || 'no department'}${extra}`);
+  } catch (err){
+    showToast(err.message);
+    sel.disabled = false;
+  }
+});
+document.getElementById('staffing-dept-filter').addEventListener('change', renderStaffing);
+document.getElementById('staffing-dept-setup').addEventListener('click', async e => {
+  if (e.target.id !== 'dept-setup-btn') return;
+  const btn = e.target; btn.disabled = true; btn.textContent = 'Adding…';
+  try {
+    const col = await setupDepartmentColumn();
+    await loadAll();
+    showToast(`Department column added (column ${col}) — pick each person's department below`);
+  } catch (err){ showToast(err.message); btn.disabled = false; btn.textContent = 'Add Department column'; }
 });
 
 // ---------- Equipment filters (department + station type) ----------
@@ -2909,7 +3054,7 @@ async function addBonusSummaryRows(names){
 
 // Adds a technician to the Technicians tab: Tech_ID + Name, Hire_Date,
 // Status, and the two attendance formulas (D:E) copied from row 2.
-async function addTechnicianToSheet(name, hireDate, status){
+async function addTechnicianToSheet(name, hireDate, status, dept){
   const TAB = 'Technicians';
   const cols = await sheetsGetValues(`${TAB}!A:B`);
   if (cols.some(r => nameKey(r && r[1]) === nameKey(name) || nameKey(r && r[0]) === nameKey(name))){
@@ -2921,7 +3066,44 @@ async function addTechnicianToSheet(name, hireDate, status){
   await sheetsUpdateValues(`${TAB}!A${row}:C${row}`, [[safeCellText(name), safeCellText(name), hireDate]]);
   await sheetsBatchUpdate([copyTemplateRowRequest(ids[TAB], 3, 5, row, 1)]);
   await sheetsUpdateValues(`${TAB}!F${row}`, [[status]]);
+  if (dept){
+    const idx = await techDeptColumnIndex(true);
+    await sheetsUpdateValues(`${TAB}!${colLetter(idx)}${row}`, [[dept]]);
+  }
   return row;
+}
+
+function colLetter(i){ let s = ''; i += 1; while (i > 0){ const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+
+// Finds (or, with create=true, adds) the Department column on the
+// Technicians tab. Returns its 0-based column index.
+async function techDeptColumnIndex(create){
+  const header = (await sheetsGetValues('Technicians!1:1'))[0] || [];
+  let idx = header.findIndex(h => String(h).trim().toLowerCase() === 'department');
+  if (idx >= 0 || !create) return idx;
+  idx = header.length; // first empty column after the existing headers (G today)
+  await sheetsUpdateValues(`Technicians!${colLetter(idx)}1`, [['Department']]);
+  return idx;
+}
+
+// Adds the Department header and a Photo / Film / Video / Operations dropdown
+// down the column (rows 2-1000, same reach as the Status dropdown).
+async function setupDepartmentColumn(){
+  const idx = await techDeptColumnIndex(true);
+  const ids = await getSheetIds();
+  await sheetsBatchUpdate([{ setDataValidation: {
+    range: { sheetId: ids['Technicians'], startRowIndex: 1, endRowIndex: 1004, startColumnIndex: idx, endColumnIndex: idx + 1 },
+    rule: { condition: { type: 'ONE_OF_LIST', values: DEPARTMENTS.map(v => ({ userEnteredValue: v })) }, strict: true, showCustomUi: true }
+  } }]);
+  return colLetter(idx);
+}
+
+async function setTechnicianDept(name, dept){
+  const idx = await techDeptColumnIndex(false);
+  if (idx < 0) throw new Error('The Department column isn\'t set up yet — use "Add Department column" on the Staffing tab first.');
+  const rowNum = await sheetsFindRow('Technicians', 'B', name);
+  if (rowNum < 0) throw new Error(`Couldn't find ${name} on the Technicians tab — try Refresh.`);
+  await sheetsUpdateValues(`Technicians!${colLetter(idx)}${rowNum}`, [[dept]]);
 }
 
 async function setTechnicianStatus(name, status){
