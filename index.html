@@ -291,8 +291,15 @@
         <span style="flex:1"></span>
         <button type="button" class="btn-sm" id="bonus-export-btn">⬇ Export payroll report (CSV)</button>
         <button type="button" class="btn-sm" id="bonus-print-btn">Print / Save as PDF</button>
+        <button type="button" class="btn-sm" id="bonus-close-btn" style="display:none;">Close month…</button>
       </div>
+      <div id="bonus-close-status" class="desc" style="margin:-4px 0 10px;"></div>
       <div style="overflow-x:auto"><table id="bonus-table"></table></div>
+    </div>
+    <div class="card" id="bonus-history-card">
+      <h2>Closed months</h2>
+      <div class="desc">Frozen copies saved to the Bonus_History tab when a month is closed. These never change, even if an old error is confirmed or removed later.</div>
+      <div id="bonus-history"></div>
     </div>
   </section>
 
@@ -492,6 +499,8 @@
               <option value="">Select…</option>
               <option>Unexcused / Call-Out</option>
               <option>Partial Shift</option>
+              <option>Approved Pre-Planned PTO</option>
+              <option>None (Worked)</option>
             </select>
           </div>
           <div class="field"><label style="display:flex;align-items:center;gap:8px;font-weight:600;"><input type="checkbox" name="Pre_Planned_Exclusion" style="width:auto;"> Pre-planned exclusion</label></div>
@@ -781,7 +790,7 @@ function jsonpUrl(tab, cbName){
 
 function gvizToObjects(table){
   const headers = (table.cols || []).map(c => c.label || c.id || '');
-  return (table.rows || []).map(r => {
+  const out = (table.rows || []).map(r => {
     const obj = {};
     headers.forEach((h,i) => {
       const cell = r.c ? r.c[i] : null;
@@ -794,6 +803,8 @@ function gvizToObjects(table){
     });
     return obj;
   });
+  out.__cols = headers;
+  return out;
 }
 
 function fetchTab(tab){
@@ -1103,8 +1114,43 @@ async function loadAll(){
   } else {
     document.getElementById('load-error').style.display = 'none';
   }
+  // Optional tabs (added in Phase 1). gviz quietly returns the FIRST tab
+  // when a name doesn't exist, so each is checked for its own headers.
+  const opt = await Promise.all([['Settings','Key'], ['Bonus_History','Closed_At']].map(async ([t, mustHave]) => {
+    try {
+      const rows = await fetchTab(t);
+      if ((rows.__cols || []).includes(mustHave)){ rows.__ok = true; return rows; }
+      return [];
+    } catch (_){ return []; }
+  }));
+  DATA.Settings = opt[0]; DATA.Bonus_History = opt[1];
+  applySettings();
   document.getElementById('last-updated').textContent = 'Updated ' + new Date().toLocaleString();
   render();
+}
+
+// Bonus rules from the Settings tab (Key | Number | Text | Description).
+// The sheet's bonus formulas read the same cells through named ranges, so
+// the dashboard's notes and badges always match the sheet.
+const BONUS_RULES = { attendanceCutoff: 0.95, ratePerPoint: 10, clericalStep: 0.25, orderStep: 0.5 };
+function settingRow(key){ return (DATA.Settings || []).find(r => String(r.Key).trim() === key); }
+function settingNumber(key, dflt){
+  const r = settingRow(key); if (!r) return dflt;
+  const v = String(r.Number).trim(); if (v === '') return dflt;
+  const n = parseFloat(v.replace(/[^0-9.\-]/g, ''));
+  if (isNaN(n)) return dflt;
+  return v.endsWith('%') ? n / 100 : n;
+}
+function applySettings(){
+  BONUS_RULES.attendanceCutoff = settingNumber('Attendance_Cutoff', 0.95);
+  BONUS_RULES.ratePerPoint = settingNumber('Rate_Per_Point', 10);
+  BONUS_RULES.clericalStep = settingNumber('Clerical_Step', 0.25);
+  BONUS_RULES.orderStep = settingNumber('Order_Step', 0.5);
+  const r = settingRow('Non_Bonus_Departments');
+  if (r && String(r.Text).trim()){
+    const list = String(r.Text).split(',').map(x => x.trim()).filter(Boolean);
+    NON_BONUS_DEPTS.splice(0, NON_BONUS_DEPTS.length, ...list);
+  }
 }
 
 function render(){
@@ -1112,6 +1158,7 @@ function render(){
   renderPending();
   renderErrorLog();
   renderBonus();
+  renderBonusHistory();
   renderAttendance();
   renderStaffing();
   renderEquipment();
@@ -2075,6 +2122,108 @@ document.getElementById('profile-body').addEventListener('click', e => {
   if (b) addMissingBonusRows([b.dataset.addBonusRow], null, b);
 });
 
+// ---------- BONUS HISTORY (Close month) ----------
+// "Close month" copies the eligible rows shown on Bonus Overview into the
+// Bonus_History tab as plain values, so a paid month never changes later.
+const HISTORY_HEADERS = ['Month/Year','Technician','Department','Hours Worked','Prior Month Score','Clerical Errors','Order Errors','Critical Violations','Disciplinary Warnings','Rolling Attendance %','Final Bonus Status','Base Bonus','Adjusted Final Bonus','Closed_By','Closed_At'];
+let closeArmed = false;
+
+function historyFor(period){ return (DATA.Bonus_History || []).filter(h => String(h['Month/Year']).trim() === String(period).trim()); }
+function historyMoney(v){ return parseFloat(String(v).replace(/[^0-9.-]/g, '')) || 0; }
+
+function renderBonusHistory(){
+  const { period } = bonusPeriodInfo();
+  const btn = document.getElementById('bonus-close-btn');
+  const status = document.getElementById('bonus-close-status');
+  const closed = period ? historyFor(period) : [];
+  const haveTab = !!(DATA.Bonus_History && DATA.Bonus_History.__ok);
+  if (closed.length){
+    status.innerHTML = `<span class="badge green">Closed</span> ${esc(period)} was saved to Bonus_History by ${esc(closed[0].Closed_By)} on ${esc(closed[0].Closed_At)} (${closed.length} technicians). The table above is the live calculation.`;
+    btn.style.display = 'none';
+  } else {
+    status.innerHTML = period ? `<span class="badge amber">Open</span> ${esc(period)} hasn't been closed yet. Close it once payroll has been sent, so these figures are frozen.` : '';
+    btn.style.display = (currentUser && period && haveTab) ? '' : 'none';
+  }
+  closeArmed = false;
+  btn.textContent = 'Close month…';
+  btn.disabled = false;
+
+  // Closed months summary
+  const by = {};
+  (DATA.Bonus_History || []).forEach(h => {
+    const m = String(h['Month/Year']).trim(); if (!m) return;
+    const t = by[m] || (by[m] = { m, n: 0, hours: 0, fin: 0, by: h.Closed_By, at: h.Closed_At });
+    t.n++; t.hours += parseFloat(String(h['Hours Worked']).replace(/,/g, '')) || 0; t.fin += historyMoney(h['Adjusted Final Bonus']);
+  });
+  const months = Object.values(by).sort((a, b) => b.m.localeCompare(a.m));
+  document.getElementById('bonus-history').innerHTML = months.length ? `
+    <table><thead><tr><th>Month</th><th>Technicians</th><th>Hours</th><th>Total Final Bonus</th><th>Closed by</th><th>Closed at</th><th></th></tr></thead><tbody>
+    ${months.map(x => `<tr><td>${esc(x.m)}</td><td>${x.n}</td><td>${fmtHours(x.hours)}</td><td><b>${fmtMoney(x.fin)}</b></td><td>${esc(x.by)}</td><td>${esc(x.at)}</td>
+      <td><button type="button" class="btn-sm" data-history-csv="${esc(x.m)}">⬇ CSV</button></td></tr>`).join('')}
+    </tbody></table>` : '<div class="empty">No months closed yet.</div>';
+}
+
+async function closeBonusMonth(){
+  const { period } = bonusPeriodInfo();
+  const rows = bonusRowsInDisplayOrder();
+  if (!period || !rows.length) throw new Error('Nothing to close.');
+  // Re-check the sheet itself so two people can't close the same month twice.
+  const existing = await sheetsGetValues('Bonus_History!A:A');
+  if (existing.some(r => String((r && r[0]) || '').trim() === period)) throw new Error(`${period} is already in Bonus_History — try Refresh.`);
+  const first = lastFilledRow(existing) + 1;
+  const now = new Date();
+  const stamp = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+  const who = currentUser.name || currentUser.email;
+  const num = v => { const n = parseFloat(String(v).replace(/[^0-9.-]/g, '')); return isNaN(n) ? '' : n; };
+  const values = rows.map(b => [
+    "'" + period, safeCellText(b.Technician), b.__dept, Math.round(b.__hours * 100) / 100,
+    b.__score === null ? '' : b.__score, num(b['Clerical Errors']), num(b['Order Errors']), num(b['Critical Violations']), num(b['Disciplinary Warnings']),
+    String(b['Rolling Attendance %'] || ''), safeCellText(b['Final Bonus Status']), Math.round(b.__base * 100) / 100, Math.round(b.__final * 100) / 100,
+    safeCellText(who), stamp
+  ]);
+  await sheetsUpdateValues(`Bonus_History!A${first}:O${first + values.length - 1}`, values);
+  return values.length;
+}
+
+function exportHistoryCsv(month){
+  const rows = historyFor(month);
+  const lines = [HISTORY_HEADERS].concat(rows.map(h => HISTORY_HEADERS.map(k => h[k])));
+  const csv = lines.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `scan-tech-bonus-closed-${month.replace(/\W+/g, '-')}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+
+// Two-step button instead of a pop-up: first click arms, second click saves.
+document.getElementById('bonus-close-btn').addEventListener('click', async e => {
+  const btn = e.target;
+  const { period } = bonusPeriodInfo();
+  const n = bonusRowsForDisplay().length;
+  if (!closeArmed){
+    closeArmed = true;
+    btn.textContent = `Click again to freeze ${period} (${n} technicians)`;
+    setTimeout(() => { if (closeArmed){ closeArmed = false; btn.textContent = 'Close month…'; } }, 8000);
+    return;
+  }
+  closeArmed = false;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    const saved = await closeBonusMonth();
+    await loadAll();
+    showToast(`${period} closed — ${saved} rows saved to Bonus_History`);
+  } catch (err){
+    showToast(err.message);
+    btn.disabled = false; btn.textContent = 'Close month…';
+  }
+});
+document.getElementById('bonus-history').addEventListener('click', e => {
+  const b = e.target.closest('button[data-history-csv]');
+  if (b) exportHistoryCsv(b.dataset.historyCsv);
+});
+
 // ---------- ATTENDANCE ----------
 function renderAttendance(){
   // Only show active technicians (Technicians tab, column F) in the summary.
@@ -2220,7 +2369,7 @@ function renderStaffing(){
       <td>${r.Status === 'Active' ? '<span class="badge green">Active</span>' : `<span class="badge grey">${esc(r.Status || '—')}</span>`}</td>
       <td>${esc(r.Hire_Date) || '—'}</td>
       <td>${tenure(r.__tenureMonths)}</td>
-      <td>${r.__att === null || isNaN(r.__att) ? '—' : (r.__att < 0.95 ? `<span class="badge red">${(r.__att * 100).toFixed(1)}%</span>` : `${(r.__att * 100).toFixed(1)}%`)}</td>
+      <td>${r.__att === null || isNaN(r.__att) ? '—' : (r.__att < BONUS_RULES.attendanceCutoff ? `<span class="badge red">${(r.__att * 100).toFixed(1)}%</span>` : `${(r.__att * 100).toFixed(1)}%`)}</td>
       <td>${fmtPct(r.__score30)}</td>
       <td>${r.__hours30 ? fmtHours(r.__hours30) : '—'}</td>
       <td>${r.__errors90 || '—'}</td>
@@ -2895,7 +3044,7 @@ async function onTokenResponse(resp){
 // sign-in state changes.
 function onAuthChange(){
   if (!DATA.Technicians) return;
-  renderStaffing(); renderBonus();
+  renderStaffing(); renderBonus(); renderBonusHistory();
   if (openErrorId) openErrorDetail(openErrorId);
   refreshOpenProfile();
 }
@@ -3039,6 +3188,9 @@ function lastFilledRow(values){
 // name in column A, bonus formulas (B onward) copied from row 2.
 async function addBonusSummaryRows(names){
   const TAB = 'Monthly_Bonus_Summary';
+  // Once column A is the automatic formula list (Phase 1), the sheet adds
+  // eligible people itself — writing a name there would break the list.
+  if (await bonusListIsAutomatic()) return [];
   const colA = await sheetsGetValues(`${TAB}!A:A`);
   const header = (await sheetsGetValues(`${TAB}!1:1`))[0] || [];
   const existing = new Set(colA.map(r => nameKey(r && r[0])));
@@ -3050,6 +3202,13 @@ async function addBonusSummaryRows(names){
   await sheetsUpdateValues(`${TAB}!A${first}:A${first + toAdd.length - 1}`, toAdd.map(n => [safeCellText(n)]));
   await sheetsBatchUpdate([copyTemplateRowRequest(ids[TAB], 1, Math.max(header.length, 17), first, toAdd.length)]);
   return toAdd;
+}
+
+async function bonusListIsAutomatic(){
+  const res = await fetch(`${SHEETS_API}/values/${encodeURIComponent('Monthly_Bonus_Summary!A2')}?valueRenderOption=FORMULA`, { headers: { Authorization: `Bearer ${currentUser.accessToken}` } });
+  if (!res.ok) return false;
+  const v = ((await res.json()).values || [[]])[0][0];
+  return typeof v === 'string' && v.trim().startsWith('=');
 }
 
 // Adds a technician to the Technicians tab: Tech_ID + Name, Hire_Date,
@@ -3663,6 +3822,11 @@ document.getElementById('form-logcoaching').addEventListener('submit', async (ev
   }
 });
 
+document.getElementById('form-logattendance').addEventListener('change', (ev) => {
+  if (ev.target.name !== 'Absence_Type') return;
+  const box = ev.target.form.querySelector('[name="Pre_Planned_Exclusion"]');
+  if (box) box.checked = ev.target.value === 'Approved Pre-Planned PTO';
+});
 document.getElementById('form-logattendance').addEventListener('submit', async (ev) => {
   ev.preventDefault();
   const msg = document.getElementById('logattendance-msg');
