@@ -239,6 +239,30 @@
     .page-actions{margin-left:0;width:100%;}
     .controls input{min-width:0;}
   }
+
+  /* --- Phase 3: charts, mini bars, attendance calendar --- */
+  .viz{position:relative;}
+  .viz-title{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin:4px 0 6px;}
+  .viz-legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:#52514e;margin-bottom:6px;}
+  .viz-legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;}
+  .viz-tip{position:absolute;top:8px;pointer-events:none;background:#fff;border:1px solid rgba(11,11,11,.12);box-shadow:0 4px 14px rgba(0,0,0,.12);border-radius:8px;padding:8px 10px;font-size:12px;min-width:150px;display:none;z-index:5;}
+  .viz-tip.show{display:block;}
+  .viz-tip .h{color:#52514e;margin-bottom:4px;}
+  .viz-tip .r{display:flex;align-items:center;gap:5px;line-height:1.6;color:#0b0b0b;}
+  .viz-tip .r i{width:8px;height:8px;border-radius:2px;display:inline-block;flex:none;}
+  .viz-tip .r .x{color:#898781;}
+  .mini-bar{display:flex;align-items:center;gap:8px;min-width:140px;}
+  .mini-bar span{display:block;height:8px;border-radius:0 4px 4px 0;background:#2a78d6;}
+  .mini-bar b{font-size:12.5px;font-variant-numeric:tabular-nums;}
+  td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;}
+  table.cal{border-collapse:collapse;font-size:11.5px;}
+  table.cal th,table.cal td{padding:3px 2px;border-bottom:1px solid #f0efec;text-align:center;}
+  table.cal th.cal-d{font-weight:600;color:#52514e;min-width:24px;}
+  table.cal th.cal-d div{font-weight:400;color:#898781;font-size:10px;}
+  table.cal .we{background:#f6f6f4;}
+  table.cal th.today{color:var(--accent);}
+  table.cal .cal-name{text-align:left;white-space:nowrap;padding-right:10px;position:sticky;left:0;background:#fff;}
+  table.cal td.cal-c span{display:inline-block;min-width:20px;height:18px;line-height:18px;border-radius:4px;font-size:10.5px;font-weight:700;}
 </style>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
@@ -311,6 +335,18 @@
         <div id="score-bars"></div>
       </div>
     </div>
+    <div class="two-col">
+      <div class="card">
+        <h2 id="dept-results-title">Results by department</h2>
+        <div class="desc">Active technicians, grouped by the Department column. Team score is output ÷ hours; errors exclude removed ones.</div>
+        <div style="overflow-x:auto" id="dept-results"></div>
+      </div>
+      <div class="card">
+        <h2 id="rate-bars-title">Errors per 100 hours</h2>
+        <div class="desc">Errors (not removed, by incident date) for every 100 hours worked — a fairer comparison than raw counts. Hover a row for the counts.</div>
+        <div id="rate-bars"></div>
+      </div>
+    </div>
     <div class="card">
       <h2>Most recent errors</h2>
       <div class="desc">Latest 8 errors in this period, by order logged</div>
@@ -378,6 +414,11 @@
       <div id="bonus-close-status" class="desc" style="margin:-4px 0 10px;"></div>
       <div style="overflow-x:auto"><table id="bonus-table"></table></div>
     </div>
+    <div class="card">
+      <h2 id="mtd-title">Month to date</h2>
+      <div class="desc">Live projection for this month from the Monthly_Bonus_Summary MTD columns. "If pending confirmed" shows what each bonus becomes if every error still awaiting review this month is confirmed — so you can see the impact before deciding.</div>
+      <div style="overflow-x:auto"><table id="mtd-table"></table></div>
+    </div>
     <div class="card" id="bonus-history-card">
       <h2>Closed months</h2>
       <div class="desc">Frozen copies saved to the Bonus_History tab when a month is closed. These never change, even if an old error is confirmed or removed later.</div>
@@ -406,6 +447,11 @@
       </div>
       <div style="overflow-x:auto"><table id="staffing-table"></table></div>
     </div>
+    <div class="card">
+      <h2>New-hire ramp</h2>
+      <div class="desc" id="ramp-desc"></div>
+      <div id="ramp-chart"></div>
+    </div>
     <div class="card" id="staffing-dq-card">
       <h2>Sheet checks</h2>
       <div class="desc">Problems in the sheet that quietly change bonuses or hide data. Names used in Tech_Scores, Error_Log or Attendance_Log that don't match anyone on the Technicians tab. These rows are left out of bonuses, scores and profiles until the name is corrected in the sheet.</div>
@@ -427,6 +473,16 @@
         <div class="desc">Most recent entries, newest first</div>
         <div style="overflow-x:auto"><table id="attendance-log-table"></table></div>
       </div>
+    </div>
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px;">
+        <h2 style="margin:0;">Attendance calendar</h2>
+        <button type="button" class="btn-sm" id="att-cal-prev" aria-label="Previous month">‹</button>
+        <b id="att-cal-label" style="font-size:14px;min-width:130px;text-align:center;"></b>
+        <button type="button" class="btn-sm" id="att-cal-next" aria-label="Next month">›</button>
+      </div>
+      <div class="desc">Every logged absence by day, from Attendance_Log. Hover a cell for the type, hours and notes.</div>
+      <div id="att-calendar"></div>
     </div>
   </section>
 
@@ -476,6 +532,18 @@
     <div class="card">
       <h2>Maintenance Log</h2>
       <div id="maintenance-body"></div>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <h2>Maintenance cost by department</h2>
+        <div class="desc">Last 6 months, from Maintenance_Log costs. Follows the department and station-type filters above.</div>
+        <div id="maint-cost"></div>
+      </div>
+      <div class="card">
+        <h2>Replacement forecast</h2>
+        <div class="desc" id="replace-forecast-sum"></div>
+        <div style="overflow-x:auto"><table id="replace-forecast"></table></div>
+      </div>
     </div>
   </section>
 
@@ -3653,6 +3721,407 @@ document.getElementById('pending-bulk-bar').addEventListener('click', async e =>
     buttons.forEach(x => x.disabled = false);
   }
 });
+
+
+// =====================================================================
+// PHASE 3 — insights & reporting
+// =====================================================================
+const VIZ = {
+  series: ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'],
+  muted: '#898781', grid: '#e1e0d9', axis: '#c3c2b7', ink: '#0b0b0b', ink2: '#52514e', surface: '#fcfcfb',
+  status: { good: '#0ca30c', warning: '#fab219', serious: '#ec835a', critical: '#d03b3b' }
+};
+
+// ---------- small SVG chart kit (line + column), with hover tooltips ----------
+function niceMax(v){ if (!(v > 0)) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); const n = v / p; return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * p; }
+let __vizId = 0;
+// opts: { series:[{name,color,values:[number|null]}], labels:[x labels], yFmt, yMin, yMax, height, ref:{value,label}, kind:'line'|'column' }
+function vizChart(opts){
+  const id = 'viz' + (++__vizId);
+  const W = opts.width || 560, H = opts.height || 200, L = 44, R = 16, T = 14, B = 26;
+  const n = opts.labels.length;
+  const vals = opts.series.flatMap(s => s.values).filter(v => v !== null && v !== undefined && !isNaN(v));
+  if (opts.ref) vals.push(opts.ref.value);
+  const yMin = opts.yMin ?? 0;
+  const yMax = opts.yMax ?? niceMax(Math.max(...vals, yMin + 0.0001) * 1.05);
+  const x = i => opts.kind === 'column' ? L + (i + 0.5) * (W - L - R) / n : L + (n === 1 ? (W - L - R) / 2 : i * (W - L - R) / (n - 1));
+  const y = v => T + (H - T - B) * (1 - (v - yMin) / (yMax - yMin));
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map(f => yMin + f * (yMax - yMin));
+  const fmt = opts.yFmt || (v => String(Math.round(v * 10) / 10));
+  let g = ticks.map(t => `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}" stroke="${t === yMin ? VIZ.axis : VIZ.grid}" stroke-width="1"/>
+    <text x="${L - 6}" y="${y(t) + 4}" text-anchor="end" font-size="10.5" fill="${VIZ.muted}" style="font-variant-numeric:tabular-nums">${esc(fmt(t))}</text>`).join('');
+  const step = Math.max(1, Math.ceil(n / 8));
+  g += opts.labels.map((lab, i) => (i % step === 0 || i === n - 1) ? `<text x="${x(i)}" y="${H - 8}" text-anchor="middle" font-size="10.5" fill="${VIZ.muted}">${esc(lab)}</text>` : '').join('');
+  if (opts.ref){
+    g += `<line x1="${L}" x2="${W - R}" y1="${y(opts.ref.value)}" y2="${y(opts.ref.value)}" stroke="${VIZ.ink2}" stroke-width="1" opacity=".45"><title>${esc(opts.ref.label)}</title></line>`;
+  }
+  if (opts.kind === 'column'){
+    const s = opts.series[0];
+    const bw = Math.min(24, (W - L - R) / n - 4);
+    g += s.values.map((v, i) => {
+      if (v === null || v === undefined || isNaN(v) || v <= yMin) return '';
+      const x0 = x(i) - bw / 2, y0 = y(v), h = y(yMin) - y0, r = Math.min(4, h, bw / 2);
+      return `<path d="M${x0},${y(yMin)} V${y0 + r} Q${x0},${y0} ${x0 + r},${y0} H${x0 + bw - r} Q${x0 + bw},${y0} ${x0 + bw},${y0 + r} V${y(yMin)} Z" fill="${s.color}"/>`;
+    }).join('');
+  } else {
+    opts.series.forEach(s => {
+      let d = '', pen = false;
+      s.values.forEach((v, i) => { if (v === null || v === undefined || isNaN(v)){ pen = false; return; } d += `${pen ? 'L' : 'M'}${x(i)},${y(v)} `; pen = true; });
+      if (d) g += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+      // end dot
+      for (let i = s.values.length - 1; i >= 0; i--){ const v = s.values[i]; if (v !== null && v !== undefined && !isNaN(v)){ g += `<circle cx="${x(i)}" cy="${y(v)}" r="4" fill="${s.color}" stroke="${VIZ.surface}" stroke-width="2"/>`; break; } }
+    });
+  }
+  g += `<line class="viz-cross" x1="0" x2="0" y1="${T}" y2="${H - B}" stroke="${VIZ.ink2}" stroke-width="1" opacity="0"/>`;
+  g += `<rect class="viz-hit" x="${L}" y="${T}" width="${W - L - R}" height="${H - T - B}" fill="transparent"/>`;
+  const legend = opts.series.length > 1 ? `<div class="viz-legend">${opts.series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)}</span>`).join('')}</div>` : '';
+  VIZ_REG[id] = { opts, x, n, W, L, R, fmt: opts.tipFmt || fmt };
+  return `<div class="viz" id="${id}">${legend}<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${esc(opts.aria || '')}" style="display:block;overflow:visible">${g}</svg><div class="viz-tip"></div></div>`;
+}
+const VIZ_REG = {};
+document.addEventListener('pointermove', e => {
+  const hit = e.target.closest && e.target.closest('.viz-hit');
+  document.querySelectorAll('.viz .viz-tip.show').forEach(t => { if (!hit || t.parentElement !== hit.closest('.viz')) { t.classList.remove('show'); const c = t.parentElement.querySelector('.viz-cross'); if (c) c.setAttribute('opacity', '0'); } });
+  if (!hit) return;
+  const box = hit.closest('.viz'), reg = VIZ_REG[box.id]; if (!reg) return;
+  const svg = box.querySelector('svg'), r = svg.getBoundingClientRect();
+  const sx = (e.clientX - r.left) * reg.W / r.width;
+  let best = 0, bd = Infinity;
+  for (let i = 0; i < reg.n; i++){ const d = Math.abs(reg.x(i) - sx); if (d < bd){ bd = d; best = i; } }
+  const cross = box.querySelector('.viz-cross');
+  cross.setAttribute('x1', reg.x(best)); cross.setAttribute('x2', reg.x(best)); cross.setAttribute('opacity', reg.opts.kind === 'column' ? '0' : '.35');
+  const tip = box.querySelector('.viz-tip');
+  tip.textContent = '';
+  const head = document.createElement('div'); head.className = 'h'; head.textContent = reg.opts.tipLabels ? reg.opts.tipLabels[best] : reg.opts.labels[best]; tip.appendChild(head);
+  reg.opts.series.forEach(s => {
+    const v = s.values[best];
+    const row = document.createElement('div'); row.className = 'r';
+    const sw = document.createElement('i'); sw.style.background = s.color; row.appendChild(sw);
+    const b = document.createElement('b'); b.textContent = (v === null || v === undefined || isNaN(v)) ? '—' : reg.fmt(v); row.appendChild(b);
+    if (reg.opts.series.length > 1){ const sp = document.createElement('span'); sp.textContent = ' ' + s.name; row.appendChild(sp); }
+    if (reg.opts.extra){ const ex = reg.opts.extra(best, s); if (ex){ const sp = document.createElement('span'); sp.className = 'x'; sp.textContent = ' ' + ex; row.appendChild(sp); } }
+    tip.appendChild(row);
+  });
+  const px = reg.x(best) / reg.W * r.width;
+  tip.style.left = Math.min(Math.max(px + 10, 0), r.width - 170) + 'px';
+  tip.classList.add('show');
+});
+
+// ---------- Error rate per 100 hours ----------
+function errorsPer100(errCount, hours){ return hours > 0 ? errCount / hours * 100 : null; }
+function fmtRate(v){ return v === null || v === undefined || isNaN(v) ? '—' : (Math.round(v * 10) / 10).toFixed(1); }
+
+// Totals per technician in a date range: hours, output, errors (not removed).
+function periodTotalsByTech(r){
+  const by = {};
+  const get = name => { const k = nameKey(name); return by[k] || (by[k] = { name, hours: 0, output: 0, errors: 0 }); };
+  (DATA.Tech_Scores || []).forEach(s => {
+    if (!s.Name || !inRange(parseFlexDate(s.Date), r)) return;
+    const t = get(s.Name);
+    t.hours += parseFloat(String(s.Hours).replace(/,/g, '')) || 0;
+    t.output += parseFloat(String(s.Output).replace(/,/g, '')) || 0;
+  });
+  (DATA.Error_Log || []).forEach(e => {
+    if (isRemoved(e) || !e.Technician_Name || !inRange(parseFlexDate(e.Incident_Date), r)) return;
+    get(e.Technician_Name).errors++;
+  });
+  return by;
+}
+
+function renderPhase3Overview(){
+  const r = currentOverviewRange();
+  const by = periodTotalsByTech(r);
+  const techs = (DATA.Technicians || []).filter(t => t.Status === 'Active');
+  // Results by department
+  const depts = {};
+  techs.forEach(t => {
+    const d = techDeptOf(t) || 'Unassigned';
+    const x = depts[d] || (depts[d] = { dept: d, n: 0, hours: 0, output: 0, errors: 0 });
+    const tt = by[nameKey(t.Name)] || { hours: 0, output: 0, errors: 0 };
+    x.n++; x.hours += tt.hours; x.output += tt.output; x.errors += tt.errors;
+  });
+  const order = d => { const i = DEPARTMENTS.indexOf(d); return i < 0 ? 99 : i; };
+  const rows = Object.values(depts).sort((a, b) => order(a.dept) - order(b.dept));
+  const tot = rows.reduce((a, d) => ({ n: a.n + d.n, hours: a.hours + d.hours, output: a.output + d.output, errors: a.errors + d.errors }), { n: 0, hours: 0, output: 0, errors: 0 });
+  const maxRate = Math.max(0.0001, ...rows.map(d => errorsPer100(d.errors, d.hours) || 0));
+  document.getElementById('dept-results-title').textContent = `Results by department — ${r.label.toLowerCase()}`;
+  document.getElementById('dept-results').innerHTML = rows.length ? `<table>
+    <thead><tr><th>Department</th><th class="num">Active techs</th><th class="num">Hours</th><th class="num">Team score</th><th class="num">Errors</th><th>Errors per 100 hrs</th></tr></thead><tbody>
+    ${rows.map(d => { const rate = errorsPer100(d.errors, d.hours); return `<tr>
+      <td>${esc(d.dept)}${NON_BONUS_DEPTS.includes(d.dept) ? ' <span class="muted" style="font-size:11.5px;">(no bonus)</span>' : ''}</td><td class="num">${d.n}</td><td class="num">${fmtHours(d.hours)}</td>
+      <td class="num">${d.hours > 0 ? fmtPct(d.output / d.hours) : '—'}</td><td class="num">${d.errors}</td>
+      <td><div class="mini-bar"><span style="width:${!rate ? 0 : Math.max(2, rate / maxRate * 100)}%"></span><b>${fmtRate(rate)}</b></div></td></tr>`; }).join('')}
+    </tbody><tfoot><tr style="font-weight:700;"><td>All active</td><td class="num">${tot.n}</td><td class="num">${fmtHours(tot.hours)}</td>
+      <td class="num">${tot.hours > 0 ? fmtPct(tot.output / tot.hours) : '—'}</td><td class="num">${tot.errors}</td><td><b>${fmtRate(errorsPer100(tot.errors, tot.hours))}</b></td></tr></tfoot></table>`
+    : '<div class="empty">No active technicians.</div>';
+
+  // Errors per 100 hours by technician (active, with hours in the period)
+  const list = techs.map(t => { const tt = by[nameKey(t.Name)] || { hours: 0, errors: 0 }; return { name: t.Name, hours: tt.hours, errors: tt.errors, rate: errorsPer100(tt.errors, tt.hours) }; })
+    .filter(x => x.hours > 0).sort((a, b) => b.rate - a.rate || b.errors - a.errors);
+  const mx = Math.max(0.0001, ...list.map(x => x.rate));
+  document.getElementById('rate-bars-title').textContent = `Errors per 100 hours — ${r.label.toLowerCase()}`;
+  document.getElementById('rate-bars').innerHTML = list.length ? list.map(x => `
+    <div class="bar-row" title="${x.errors} error${x.errors === 1 ? '' : 's'} in ${fmtHours(x.hours)} hours">
+      <div class="name">${techLink(x.name)}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${x.rate ? Math.max(1.5, x.rate / mx * 100) : 0}%;background:${VIZ.series[0]};"></div></div>
+      <div class="val">${fmtRate(x.rate)}</div>
+    </div>`).join('') : '<div class="empty">No hours logged in this period.</div>';
+}
+
+// ---------- Profile: 12-week trend ----------
+function weeklySeries(name, weeks){
+  const k = nameKey(name);
+  const start = weekStartMonday(new Date());
+  const keys = [], labels = [], tips = [];
+  for (let i = weeks - 1; i >= 0; i--){
+    const ws = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 7 * i);
+    keys.push(ws.getTime()); labels.push(`${ws.getMonth() + 1}/${ws.getDate()}`);
+    const we = new Date(ws.getFullYear(), ws.getMonth(), ws.getDate() + 6);
+    tips.push(`Week of ${ws.getMonth() + 1}/${ws.getDate()}–${we.getMonth() + 1}/${we.getDate()}${i === 0 ? ' (this week)' : ''}`);
+  }
+  const idx = {}; keys.forEach((t, i) => idx[t] = i);
+  const hours = keys.map(() => 0), output = keys.map(() => 0), errors = keys.map(() => 0);
+  (DATA.Tech_Scores || []).forEach(s => {
+    if (nameKey(s.Name) !== k) return;
+    const d = parseFlexDate(s.Date); if (!d) return;
+    const i = idx[weekStartMonday(d).getTime()]; if (i === undefined) return;
+    hours[i] += parseFloat(String(s.Hours).replace(/,/g, '')) || 0;
+    output[i] += parseFloat(String(s.Output).replace(/,/g, '')) || 0;
+  });
+  (DATA.Error_Log || []).forEach(e => {
+    if (nameKey(e.Technician_Name) !== k || isRemoved(e)) return;
+    const d = parseFlexDate(e.Incident_Date); if (!d) return;
+    const i = idx[weekStartMonday(d).getTime()]; if (i !== undefined) errors[i]++;
+  });
+  return { labels, tips, hours, errors,
+    score: hours.map((h, i) => h > 0 ? output[i] / h : null),
+    rate: hours.map((h, i) => h > 0 ? errors[i] / h * 100 : (errors[i] ? null : null)) };
+}
+function trendHtml(name){
+  const w = weeklySeries(name, 12);
+  if (!w.hours.some(h => h > 0)) return '';
+  const pct = v => (Math.round(v * 1000) / 10) + '%';
+  const scoreChart = vizChart({ kind: 'line', labels: w.labels, tipLabels: w.tips, series: [{ name: 'Weekly score', color: VIZ.series[0], values: w.score }],
+    yFmt: v => Math.round(v * 100) + '%', tipFmt: pct, ref: { value: 1, label: '100% pace' }, height: 190,
+    extra: i => w.hours[i] ? `${fmtHours(w.hours[i])} hrs` : 'no hours', aria: `Weekly score for ${name}, last 12 weeks` });
+  const rateChart = vizChart({ kind: 'column', labels: w.labels, tipLabels: w.tips, series: [{ name: 'Errors per 100 hrs', color: VIZ.series[0], values: w.rate }],
+    yFmt: v => String(Math.round(v * 10) / 10), tipFmt: v => (Math.round(v * 10) / 10) + ' per 100 hrs', height: 190,
+    extra: i => `${w.errors[i]} error${w.errors[i] === 1 ? '' : 's'}`, aria: `Errors per 100 hours for ${name}, last 12 weeks` });
+  return `<div class="card"><h2>12-week trend</h2>
+    <div class="desc">Score is output ÷ hours for each week (hours-weighted, like the bonus); the grey line is 100% pace. Errors exclude removed ones and use the incident date. Hover a week for details.</div>
+    <div class="two-col" style="margin:0;"><div><div class="viz-title">Weekly score</div>${scoreChart}</div><div><div class="viz-title">Errors per 100 hours</div>${w.errors.some(x => x > 0) ? rateChart : '<div class="empty" style="padding:40px 0;">No errors in the last 12 weeks.</div>'}</div></div></div>`;
+}
+const _p3_openProfile = openProfile;
+openProfile = function(name){
+  _p3_openProfile(name);
+  const body = document.getElementById('profile-body');
+  const html = trendHtml(name);
+  if (!html) return;
+  // place after the bonus cards (before the 5-week table) — i.e. after the second card group
+  const anchor = [...body.querySelectorAll(':scope > .card')].find(c => /Weekly scores|weekly/i.test((c.querySelector('h2') || {}).textContent || ''));
+  if (anchor) anchor.insertAdjacentHTML('beforebegin', html); else body.insertAdjacentHTML('beforeend', html);
+};
+
+// ---------- Staffing: new-hire ramp ----------
+function renderRamp(){
+  const box = document.getElementById('ramp-chart');
+  const scores = DATA.Tech_Scores || [];
+  const dates = scores.map(s => parseFlexDate(s.Date)).filter(Boolean);
+  if (!dates.length){ box.innerHTML = '<div class="empty">No score data.</div>'; return; }
+  const trackStart = new Date(Math.min(...dates));
+  const WEEKS = 12;
+  const now = new Date();
+  const recentCut = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 120);
+  const perTech = t => {
+    const hire = parseFlexDate(t.Hire_Date); if (!hire) return null;
+    const k = nameKey(t.Name);
+    const h = Array(WEEKS).fill(0), o = Array(WEEKS).fill(0);
+    scores.forEach(s => {
+      if (nameKey(s.Name) !== k) return;
+      const d = parseFlexDate(s.Date); if (!d) return;
+      const wk = Math.floor((d - hire) / (7 * 86400000)); if (wk < 0 || wk >= WEEKS) return;
+      h[wk] += parseFloat(String(s.Hours).replace(/,/g, '')) || 0; o[wk] += parseFloat(String(s.Output).replace(/,/g, '')) || 0;
+    });
+    return { name: t.Name, hire, values: h.map((x, i) => x > 0 ? o[i] / x : null) };
+  };
+  const all = (DATA.Technicians || []).map(perTech).filter(x => x && x.values.some(v => v !== null));
+  const activeKeys = new Set((DATA.Technicians || []).filter(t => t.Status === 'Active').map(t => nameKey(t.Name)));
+  const recent = all.filter(x => x.hire >= recentCut && activeKeys.has(nameKey(x.name))).sort((a, b) => a.hire - b.hire).slice(-8);
+  // Earlier hires whose first weeks fall inside the tracked period.
+  const earlier = all.filter(x => x.hire < recentCut && x.hire >= trackStart);
+  const median = Array(WEEKS).fill(0).map((_, i) => {
+    const v = earlier.map(x => x.values[i]).filter(v => v !== null).sort((a, b) => a - b);
+    return v.length >= 2 ? v[Math.floor(v.length / 2)] : null;
+  });
+  const series = recent.map((x, i) => ({ name: `${x.name} (hired ${fmtDateUS(x.hire)})`, color: VIZ.series[i], values: x.values }));
+  if (median.some(v => v !== null)) series.push({ name: `Earlier hires — median (${earlier.length})`, color: VIZ.muted, values: median });
+  document.getElementById('ramp-desc').textContent = `Weekly score (output ÷ hours) by week since hire, for active technicians hired in the last 120 days.` +
+    ` The grey line is 100% pace` + (median.some(v => v !== null) ? `; the grey series is the median of ${earlier.length} earlier hires whose first weeks were tracked.` : `. Score tracking started ${fmtDateUS(trackStart)}, so there isn't an earlier-hire comparison yet.`);
+  box.innerHTML = series.length ? vizChart({ kind: 'line', labels: Array.from({ length: WEEKS }, (_, i) => `Wk ${i + 1}`), series,
+    yFmt: v => Math.round(v * 100) + '%', tipFmt: v => (Math.round(v * 1000) / 10) + '%', ref: { value: 1, label: '100% pace' }, height: 300, width: 1100,
+    aria: 'New-hire ramp: weekly score by week since hire' }) : '<div class="empty">No technicians hired in the last 120 days.</div>';
+}
+
+// ---------- Attendance calendar ----------
+let calMonth = (() => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), 1); })();
+const ABSENCE_STYLE = {
+  'unexcused / call-out': { c: VIZ.status.critical, label: 'Unexcused / Call-Out', ink: '#fff' },
+  'partial shift': { c: VIZ.status.warning, label: 'Partial Shift', ink: '#0b0b0b' },
+  'approved pre-planned pto': { c: VIZ.series[0], label: 'Approved PTO', ink: '#fff' },
+  'none (worked)': { c: '#e1e0d9', label: 'None (worked)', ink: '#0b0b0b' }
+};
+function renderAttendanceCalendar(){
+  const box = document.getElementById('att-calendar');
+  const y = calMonth.getFullYear(), m = calMonth.getMonth();
+  const days = new Date(y, m + 1, 0).getDate();
+  document.getElementById('att-cal-label').textContent = calMonth.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const entries = {};
+  (DATA.Attendance_Log || []).forEach(a => {
+    const d = parseFlexDate(a.Work_Date); if (!d || d.getFullYear() !== y || d.getMonth() !== m) return;
+    const k = nameKey(a.Technician_Name);
+    (entries[k] = entries[k] || {})[d.getDate()] = (entries[k][d.getDate()] || []).concat([a]);
+  });
+  const techs = (DATA.Technicians || []).filter(t => t.Status === 'Active' || entries[nameKey(t.Name)]).sort((a, b) => a.Name.localeCompare(b.Name));
+  const today = new Date();
+  const head = `<tr><th class="cal-name">Technician</th>${Array.from({ length: days }, (_, i) => { const dd = new Date(y, m, i + 1); const we = dd.getDay() === 0 || dd.getDay() === 6;
+    return `<th class="cal-d${we ? ' we' : ''}${dd.toDateString() === today.toDateString() ? ' today' : ''}">${i + 1}<div>${'SMTWTFS'[dd.getDay()]}</div></th>`; }).join('')}<th class="num">Hrs</th></tr>`;
+  const body = techs.map(t => {
+    const e = entries[nameKey(t.Name)] || {};
+    let total = 0;
+    const cells = Array.from({ length: days }, (_, i) => {
+      const dd = new Date(y, m, i + 1); const we = dd.getDay() === 0 || dd.getDay() === 6;
+      const list = e[i + 1];
+      if (!list) return `<td class="cal-c${we ? ' we' : ''}"></td>`;
+      const hrs = list.reduce((s, a) => s + (parseFloat(a.Hours_Missed) || 0), 0);
+      const excluded = list.every(a => String(a.Pre_Planned_Exclusion).toUpperCase() === 'TRUE');
+      if (!excluded) total += hrs;
+      const st = ABSENCE_STYLE[String(list[0].Absence_Type || '').toLowerCase()] || { c: VIZ.muted, ink: '#fff', label: list[0].Absence_Type || 'Absence' };
+      const tip = list.map(a => `${a.Absence_Type || 'Absence'} — ${a.Hours_Missed || 0} hrs${String(a.Pre_Planned_Exclusion).toUpperCase() === 'TRUE' ? ' (excluded)' : ''}${a.Notes ? ': ' + a.Notes : ''}`).join('\n');
+      return `<td class="cal-c${we ? ' we' : ''}" title="${esc(`${fmtDateUS(dd)}\n${tip}`)}"><span style="background:${st.c};color:${st.ink}">${hrs ? (Math.round(hrs * 10) / 10) : ''}</span></td>`;
+    }).join('');
+    return `<tr><td class="cal-name">${techLink(t.Name)}</td>${cells}<td class="num">${total ? fmtHours(total) : '—'}</td></tr>`;
+  }).join('');
+  box.innerHTML = `<div class="viz-legend" style="margin-bottom:8px;">${Object.values(ABSENCE_STYLE).map(s => `<span><i style="background:${s.c}"></i>${esc(s.label)}</span>`).join('')}<span class="muted">Number = hours missed · Hrs column excludes pre-planned exclusions</span></div>
+    <div style="overflow-x:auto"><table class="cal">${head}${body}</table></div>`;
+}
+document.getElementById('att-cal-prev').addEventListener('click', () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() - 1, 1); renderAttendanceCalendar(); });
+document.getElementById('att-cal-next').addEventListener('click', () => { calMonth = new Date(calMonth.getFullYear(), calMonth.getMonth() + 1, 1); renderAttendanceCalendar(); });
+
+// ---------- Bonus: live month-to-date projection with "if pending confirmed" ----------
+function renderMtdProjection(){
+  const box = document.getElementById('mtd-projection');
+  const mr = periodRange('month');
+  const rows = (DATA.Monthly_Bonus_Summary || []).filter(b => b.Technician && isBonusEligible(techByName(b.Technician)));
+  const money = v => parseFloat(String(v).replace(/[^0-9.-]/g, '')) || 0;
+  const counts = (name, statuses) => {
+    const c = { cler: 0, order: 0, crit: 0, warn: 0 };
+    (DATA.Error_Log || []).forEach(e => {
+      if (nameKey(e.Technician_Name) !== nameKey(name) || !inRange(parseFlexDate(e.Incident_Date), mr)) return;
+      if (!statuses.includes(e.Confirmation_Status)) return;
+      const k = e.Error_Classification;
+      if (k === 'Clerical Error') c.cler++; else if (k === 'Rescan / Order Error') c.order++; else if (k === 'Critical Violation') c.crit++; else if (k === 'Disciplinary Warning') c.warn++;
+    });
+    return c;
+  };
+  const project = (base, att, c) => {
+    const red = Math.min(1, c.cler * BONUS_RULES.clericalStep + c.order * BONUS_RULES.orderStep);
+    if (att < BONUS_RULES.attendanceCutoff || c.crit > 0 || c.warn > 0 || red >= 1) return 0;
+    return base * (1 - red);
+  };
+  let tNow = 0, tIf = 0, tBase = 0;
+  const data = rows.map(b => {
+    const base = money(b['MTD Base Bonus']);
+    const att = (parseFloat(String(b['Rolling Attendance %']).replace('%', '')) || 0) / (String(b['Rolling Attendance %']).includes('%') ? 100 : 1);
+    const conf = counts(b.Technician, [CONFIRMED_STATUS]);
+    const pend = counts(b.Technician, [PENDING_STATUS]);
+    const both = { cler: conf.cler + pend.cler, order: conf.order + pend.order, crit: conf.crit + pend.crit, warn: conf.warn + pend.warn };
+    const nPend = pend.cler + pend.order + pend.crit + pend.warn;
+    const now = money(b['MTD Projected Final Bonus']);
+    const ifC = nPend ? project(base, att, both) : now;
+    tNow += now; tIf += ifC; tBase += base;
+    return { b, base, nPend, now, ifC, dept: techDeptOf(techByName(b.Technician)) || 'Unassigned', hours: scoreTotals(b.Technician, mr).hours };
+  });
+  const cols = [
+    { label: 'Technician', key: 'tech', get: x => x.b.Technician },
+    { label: 'Department', key: 'dept', get: x => x.dept },
+    { label: 'MTD Hours', key: 'hours', get: x => x.hours },
+    { label: 'MTD Score', key: 'score', get: x => parseScore(x.b['MTD Score']) },
+    { label: 'MTD Base', key: 'base', get: x => x.base },
+    { label: 'Projected now', key: 'now', get: x => x.now },
+    { label: 'Pending errors', key: 'pend', get: x => x.nPend },
+    { label: 'If pending confirmed', key: 'if', get: x => x.ifC },
+  ];
+  document.getElementById('mtd-title').textContent = `Month to date — ${mr.start.toLocaleString('en-US', { month: 'long', year: 'numeric' })} (live projection)`;
+  const footer = data.length ? `<tfoot><tr style="font-weight:700;"><td>Total</td><td></td><td></td><td></td><td>${fmtMoney(tBase)}</td><td>${fmtMoney(tNow)}</td><td></td><td>${fmtMoney(tIf)}</td></tr></tfoot>` : '';
+  buildSortableTable(document.getElementById('mtd-table'), cols, data, x => `<tr>
+    <td>${techLink(x.b.Technician)}</td><td>${esc(x.dept)}</td><td>${fmtHours(x.hours)}</td><td>${fmtScoreStr(x.b['MTD Score'])}</td>
+    <td>${fmtMoney(x.base)}</td><td><b>${fmtMoney(x.now)}</b></td>
+    <td>${x.nPend ? `<span class="badge amber">${x.nPend}</span>` : '—'}</td>
+    <td>${x.nPend ? (x.ifC < x.now ? `<b style="color:var(--red)">${fmtMoney(x.ifC)}</b> <span class="muted">(−${fmtMoney(x.now - x.ifC)})</span>` : fmtMoney(x.ifC)) : '<span class="muted">same</span>'}</td>
+  </tr>`, { key: 'tech', dir: 1 }, footer);
+}
+
+// ---------- Equipment: maintenance cost + replacement forecast ----------
+function renderEquipmentReports(){
+  const stations = {}; (DATA.Stations || []).forEach(s => stations[s.Station_ID] = s);
+  const assets = {}; (DATA.Equipment || []).forEach(a => assets[a.Asset_ID] = a);
+  const deptOfAsset = a => { const st = a && stations[a.Current_Station_ID]; return st ? (st.Department || 'Other') : 'Unassigned'; };
+  const inFilter = a => stationMatchesFilter(a ? stations[a.Current_Station_ID] : null);
+  // Maintenance cost by department, last 6 months
+  const now = new Date();
+  const months = Array.from({ length: 6 }, (_, i) => new Date(now.getFullYear(), now.getMonth() - 5 + i, 1));
+  const mKey = d => `${d.getFullYear()}-${d.getMonth()}`;
+  const cost = {}; const deptSet = new Set();
+  (DATA.Maintenance_Log || []).forEach(l => {
+    const a = assets[l.Asset_ID]; if (!inFilter(a)) return;
+    const d = parseFlexDate(l.Log_Date); if (!d) return;
+    const c = parseFloat(String(l.Cost).replace(/[^0-9.-]/g, '')) || 0;
+    const dept = deptOfAsset(a); deptSet.add(dept);
+    const k = dept + '|' + mKey(new Date(d.getFullYear(), d.getMonth(), 1));
+    cost[k] = (cost[k] || 0) + c;
+  });
+  const depts = [...deptSet].sort();
+  const anyCost = Object.keys(cost).some(k => cost[k] > 0 && months.some(m => k.endsWith('|' + mKey(m))));
+  document.getElementById('maint-cost').innerHTML = anyCost ? `<div style="overflow-x:auto"><table><thead><tr><th>Department</th>${months.map(m => `<th class="num">${m.toLocaleString('en-US', { month: 'short' })}</th>`).join('')}<th class="num">6-mo total</th></tr></thead><tbody>
+    ${depts.map(d => { let t = 0; const cells = months.map(m => { const v = cost[d + '|' + mKey(m)] || 0; t += v; return `<td class="num">${v ? fmtMoney(v) : '—'}</td>`; }).join(''); return `<tr><td>${esc(d)}</td>${cells}<td class="num"><b>${fmtMoney(t)}</b></td></tr>`; }).join('')}
+    </tbody></table></div>` : '<div class="empty">No maintenance costs logged in the last 6 months for these stations.</div>';
+
+  // Replacement forecast: end of expected life within 6 months, or already past.
+  const horizon = new Date(now.getFullYear(), now.getMonth() + 6, now.getDate());
+  const due = (DATA.Equipment || []).filter(a => inFilter(a) && String(a.Status).toLowerCase() !== 'decommissioned').map(a => {
+    const start = parseFlexDate(a.In_Service_Date) || parseFlexDate(a.Purchase_Date);
+    const life = parseFloat(a.Expected_Lifecycle_Months);
+    if (!start || !(life > 0)) return null;
+    const end = new Date(start.getFullYear(), start.getMonth() + life, start.getDate());
+    return { a, end, monthsLeft: Math.round((end - now) / (30.44 * 86400000)), price: parseFloat(String(a.Purchase_Price).replace(/[^0-9.-]/g, '')) || 0, dept: deptOfAsset(a) };
+  }).filter(x => x && x.end <= horizon).sort((x, y) => x.end - y.end);
+  const byDept = {}; due.forEach(x => byDept[x.dept] = (byDept[x.dept] || 0) + x.price);
+  const total = due.reduce((s, x) => s + x.price, 0);
+  document.getElementById('replace-forecast-sum').textContent = due.length
+    ? `${due.length} asset${due.length === 1 ? '' : 's'} at or within 6 months of end of expected life · estimated replacement ${fmtMoney(total)} at original purchase price (${Object.entries(byDept).map(([d, v]) => `${d} ${fmtMoney(v)}`).join(' · ')})`
+    : 'Nothing reaches the end of its expected life in the next 6 months.';
+  const cols = [
+    { label: 'Asset', key: 'id', get: x => x.a.Asset_ID }, { label: 'Model', key: 'model', get: x => x.a.Model }, { label: 'Type', key: 'type', get: x => x.a.Type },
+    { label: 'Station', key: 'st', get: x => x.a.Current_Station_ID }, { label: 'Department', key: 'dept', get: x => x.dept },
+    { label: 'End of life', key: 'end', get: x => x.end }, { label: 'Months left', key: 'left', get: x => x.monthsLeft }, { label: 'Purchase price', key: 'price', get: x => x.price }
+  ];
+  buildSortableTable(document.getElementById('replace-forecast'), cols, due, x => `<tr>
+    <td>${assetLink(x.a.Asset_ID)}</td><td>${esc(x.a.Model) || '—'}</td><td>${esc(x.a.Type)}</td><td>${esc(x.a.Current_Station_ID)}</td><td>${esc(x.dept)}</td>
+    <td>${fmtDateUS(x.end)}</td><td>${x.monthsLeft < 0 ? `<span class="badge red">${-x.monthsLeft} mo overdue</span>` : x.monthsLeft <= 2 ? `<span class="badge amber">${x.monthsLeft} mo</span>` : x.monthsLeft + ' mo'}</td>
+    <td>${x.price ? fmtMoney(x.price) : '—'}</td></tr>`, { key: 'end', dir: 1 });
+}
+
+// ---------- hook Phase 3 into the existing renders ----------
+const _p3_renderOverview = renderOverview;
+renderOverview = function(){ _p3_renderOverview(); renderPhase3Overview(); };
+const _p3_renderStaffing = renderStaffing;
+renderStaffing = function(){ _p3_renderStaffing(); renderRamp(); };
+const _p3_renderAttendance = renderAttendance;
+renderAttendance = function(){ _p3_renderAttendance(); renderAttendanceCalendar(); };
+const _p3_renderBonus = renderBonus;
+renderBonus = function(){ _p3_renderBonus(); renderMtdProjection(); };
+const _p3_renderEquipment = renderEquipment;
+renderEquipment = function(){ _p3_renderEquipment(); renderEquipmentReports(); };
 
 
 window.addEventListener('load', initGIS);
